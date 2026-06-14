@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% import "macros/icons.html" as icons %}
+{% block title %}议题编排：{{ meeting.title }} - QBP Meeting MGMT{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ icons.icon('list', 'icon-title') }} 议题编排</h1>
+        <p class="muted">{{ meeting.meeting_no }} · {{ meeting.title }} · {{ meeting.meeting_date.strftime('%Y-%m-%d') }}</p>
+    </div>
+    <div class="page-header-actions">
+        <a class="btn btn-secondary" href="{{ url_for('agenda_index') }}">{{ icons.icon('back') }} 返回列表</a>
+        <a class="btn btn-outline" href="{{ url_for('meeting_detail', meeting_no=meeting.meeting_no) }}">{{ icons.icon('meeting') }} 会议详情</a>
+        <button class="btn btn-success" id="agenda-save" type="button">{{ icons.icon('save') }} 保存议题</button>
+    </div>
+</div>
+
+<div class="agenda-board" id="agenda-board"
+     data-data-url="{{ url_for('agenda_data', meeting_no=meeting.meeting_no) }}"
+     data-update-url="{{ url_for('agenda_update', meeting_no=meeting.meeting_no) }}">
+    <section class="card agenda-column" data-zone="pool">
+        <header class="agenda-column-head">
+            <h3 class="card-title">{{ icons.icon('layers') }} 议题池 <span class="agenda-count" id="agenda-pool-count">0</span></h3>
+            <p class="muted agenda-hint">拖入右侧加入议题</p>
+        </header>
+        <ul class="agenda-list" id="agenda-pool" data-empty="左池暂无可挑选的议题"></ul>
+    </section>
+    <section class="card agenda-column" data-zone="agenda">
+        <header class="agenda-column-head">
+            <h3 class="card-title">{{ icons.icon('meeting') }} 本次会议议题 <span class="agenda-count" id="agenda-list-count">0</span></h3>
+            <p class="muted agenda-hint">上下拖动调整顺序，拖回左侧即移出议题</p>
+        </header>
+        <ul class="agenda-list" id="agenda-list" data-empty="议题为空，从左侧拖入议题"></ul>
+    </section>
+</div>
+
+<style>
+.agenda-board { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 18px; margin-top: 8px; align-items: start; }
+.agenda-column { padding: 18px 18px 14px; margin-bottom: 0; }
+.agenda-column-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #eef2f7; }
+.agenda-column-head .card-title { margin: 0; display: inline-flex; align-items: center; }
+.agenda-count { display: inline-flex; min-width: 24px; height: 22px; padding: 0 8px; margin-left: 8px; align-items: center; justify-content: center; border-radius: 11px; background: #eef4ff; color: #245092; border: 1px solid #d6e4fb; font-size: 12px; font-weight: 700; }
+.agenda-hint { margin: 0; font-size: 12px; }
+.agenda-list { list-style: none; padding: 6px; margin: 0; min-height: 360px; border: 1px dashed transparent; border-radius: 6px; transition: background .15s, border-color .15s; }
+.agenda-list.drag-over { background: #eef4ff; border-color: #2f5da8; }
+.agenda-list:empty::before { content: attr(data-empty); display: grid; place-items: center; min-height: 320px; color: #94a3b8; font-size: 13px; text-align: center; padding: 16px; }
+.agenda-card { display: grid; grid-template-columns: 1fr; column-gap: 12px; row-gap: 6px; align-items: start; border: 1px solid #dde3ec; border-radius: 6px; padding: 12px 14px; margin-bottom: 10px; background: #fff; cursor: grab; box-shadow: 0 1px 3px rgba(15,23,42,.04); transition: box-shadow .15s, border-color .15s, transform .05s; }
+.agenda-card.has-order { grid-template-columns: auto 1fr; }
+.agenda-card:hover { border-color: #b8c6dc; box-shadow: 0 4px 12px rgba(15,23,42,.08); }
+.agenda-card:active { cursor: grabbing; transform: translateY(1px); }
+.agenda-card.dragging { opacity: 0.45; }
+.agenda-card .agenda-order { grid-row: 1 / span 2; align-self: center; display: inline-flex; min-width: 28px; height: 26px; align-items: center; justify-content: center; padding: 0 8px; border-radius: 4px; background: #2f5da8; color: #fff; font-size: 13px; font-weight: 700; }
+.agenda-card .agenda-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.agenda-card .agenda-title { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; color: #111827; line-height: 1.35; }
+.agenda-card .agenda-kind { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 12px; background: #eef4ff; color: #245092; border: 1px solid #d6e4fb; font-size: 11px; font-weight: 600; }
+.agenda-card .agenda-meta { display: grid; grid-template-columns: minmax(72px, .75fr) minmax(118px, 1.1fr) minmax(96px, .9fr) minmax(58px, .55fr) minmax(86px, .7fr); gap: 6px 14px; align-items: center; font-size: 12px; color: #475569; }
+.agenda-card .agenda-meta-cell { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agenda-card .agenda-meta-cell + .agenda-meta-cell::before { content: "·"; color: #cbd5e1; margin-right: 10px; }
+.agenda-card .agenda-readiness { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 10px; background: #e2e8f0; color: #334155; font-size: 11px; font-weight: 600; }
+.agenda-card .agenda-readiness.ready { background: #d8f3df; color: #14532d; }
+.agenda-card .agenda-readiness.preparing { background: #fff3cd; color: #7a5a05; }
+.agenda-card .agenda-readiness.risk { background: #fee2e2; color: #7f1d1d; }
+@media (max-width: 1100px) { .agenda-board { grid-template-columns: 1fr; } .agenda-list { min-height: 220px; } .agenda-list:empty::before { min-height: 180px; } }
+@media (max-width: 680px) { .agenda-card .agenda-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+</style>
+
+<script>
+(function() {
+    const board = document.getElementById('agenda-board');
+    if (!board) return;
+    const dataUrl = board.dataset.dataUrl;
+    const updateUrl = board.dataset.updateUrl;
+    const poolEl = document.getElementById('agenda-pool');
+    const agendaEl = document.getElementById('agenda-list');
+    const saveBtn = document.getElementById('agenda-save');
+    let state = { meeting: null, pool: [], agenda: [], originalAgendaIds: [] };
+
+    const poolCountEl = document.getElementById('agenda-pool-count');
+    const agendaCountEl = document.getElementById('agenda-list-count');
+    function kindLabel(k) { return k === 'target' ? '🎯 指定本会议' : (k === 'open' ? '🆓 开放提交' : ''); }
+    function readinessClass(s) { return s >= 70 ? 'ready' : (s >= 40 ? 'preparing' : 'risk'); }
+    function escapeHtml(s) { return (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+    function makeCard(t, inAgenda, order) {
+        const li = document.createElement('li');
+        li.className = 'agenda-card' + (inAgenda ? ' has-order' : '');
+        li.draggable = true;
+        li.dataset.id = t.id;
+        li.dataset.kind = t.kind;
+        li.dataset.workflowStatus = t.workflow_status;
+        const orderHtml = inAgenda ? `<span class="agenda-order">${order}</span>` : '';
+        const kindHtml = (!inAgenda && kindLabel(t.kind)) ? `<span class="agenda-kind">${kindLabel(t.kind)}</span>` : '';
+        const metaFields = [
+            { cls: 'agenda-meta-scope', text: escapeHtml(`${t.category || '未分类'} · ${t.plan_version || '-'}`) },
+            { cls: 'agenda-meta-owner', text: `负责人 ${escapeHtml(t.owner || '-')}` },
+            { cls: 'agenda-meta-requester', text: `提交人 ${escapeHtml(t.requester || '-')}` },
+            { cls: 'agenda-meta-attachments', text: `附件 ${t.attachment_count}` },
+            { cls: 'agenda-meta-duration', text: `时长 ${t.duration_minutes} 分钟` }
+        ];
+        const metaHtml = metaFields.map(f => `<span class="agenda-meta-cell ${f.cls}" title="${f.text}">${f.text}</span>`).join('');
+        li.innerHTML = `
+            ${orderHtml}
+            <div class="agenda-title-row">
+                ${kindHtml}
+                <span class="agenda-title">${escapeHtml(t.title)}</span>
+                <span class="agenda-readiness ${readinessClass(t.readiness.score)}">完善度 ${t.readiness.score}</span>
+            </div>
+            <div class="agenda-meta">${metaHtml}</div>`;
+        li.addEventListener('dragstart', e => { li.classList.add('dragging'); e.dataTransfer.setData('text/id', t.id); });
+        li.addEventListener('dragend', () => li.classList.remove('dragging'));
+        return li;
+    }
+
+    function render() {
+        poolEl.replaceChildren(...state.pool.map(t => makeCard(t, false)));
+        agendaEl.replaceChildren(...state.agenda.map((t, i) => makeCard(t, true, i + 1)));
+        poolCountEl.textContent = state.pool.length;
+        agendaCountEl.textContent = state.agenda.length;
+    }
+
+    function attachDrop(zoneEl, zoneName) {
+        zoneEl.addEventListener('dragover', e => { e.preventDefault(); zoneEl.classList.add('drag-over'); });
+        zoneEl.addEventListener('dragleave', () => zoneEl.classList.remove('drag-over'));
+        zoneEl.addEventListener('drop', e => {
+            e.preventDefault(); zoneEl.classList.remove('drag-over');
+            const id = parseInt(e.dataTransfer.getData('text/id'), 10);
+            const fromPool = state.pool.findIndex(x => x.id === id);
+            const fromAgenda = state.agenda.findIndex(x => x.id === id);
+            let topic = fromPool >= 0 ? state.pool[fromPool] : (fromAgenda >= 0 ? state.agenda[fromAgenda] : null);
+            if (!topic) return;
+            if (fromPool >= 0) state.pool.splice(fromPool, 1);
+            if (fromAgenda >= 0) state.agenda.splice(fromAgenda, 1);
+            if (zoneName === 'agenda') {
+                const afterEl = [...agendaEl.querySelectorAll('.agenda-card:not(.dragging)')].find(el => {
+                    const r = el.getBoundingClientRect(); return e.clientY < r.top + r.height / 2;
+                });
+                const insertIdx = afterEl ? state.agenda.findIndex(x => x.id === parseInt(afterEl.dataset.id, 10)) : state.agenda.length;
+                state.agenda.splice(insertIdx, 0, topic);
+            } else { state.pool.push(topic); }
+            render();
+        });
+    }
+
+    async function load() {
+        const resp = await fetch(dataUrl, { headers: { 'Accept': 'application/json' } });
+        const data = await resp.json();
+        state.meeting = data.meeting;
+        state.pool = data.left_pool;
+        state.agenda = data.right_column;
+        state.originalAgendaIds = data.right_column.map(t => t.id);
+        render();
+    }
+
+    saveBtn.addEventListener('click', async () => {
+        const originalSet = new Set(state.originalAgendaIds);
+        const currentSet = new Set(state.agenda.map(t => t.id));
+        const approve = [], unbind = [];
+        state.agenda.forEach(t => {
+            if (!originalSet.has(t.id)) {
+                if (t.workflow_status === 'submitted') {
+                    const c = prompt(`审批意见（议题：${t.title}）：`, '同意加入议题');
+                    if (c === null) return;
+                    approve.push({ id: t.id, review_comment: c });
+                } else { approve.push({ id: t.id, review_comment: '' }); }
+            }
+        });
+        state.originalAgendaIds.forEach(id => {
+            if (!currentSet.has(id)) {
+                const c = prompt(`移出议题的理由（议题 #${id}）：`, '议题调整');
+                if (c === null) return;
+                unbind.push({ id: id, review_comment: c });
+            }
+        });
+        const body = { expected_updated_at: state.meeting.updated_at, approve, unbind, reorder: state.agenda.map(t => t.id) };
+        const resp = await fetch(updateUrl, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        });
+        const result = await resp.json();
+        if (resp.ok && result.ok) { alert('议题已保存'); load(); }
+        else { alert('保存失败：' + (result.error || resp.status)); if (resp.status === 409) load(); }
+    });
+
+    attachDrop(poolEl, 'pool');
+    attachDrop(agendaEl, 'agenda');
+    load();
+})();
+</script>
+{% endblock %}

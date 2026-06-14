@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% import "macros/icons.html" as icons %}
+{% block title %}操作记录 - QBP Meeting MGMT{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ icons.icon('table', 'icon-title') }} 操作记录</h1>
+        <p class="muted">查看所有用户的关键业务动作与对象变更</p>
+    </div>
+    <a class="btn btn-secondary" href="{{ url_for('admin_index') }}">{{ icons.icon('back') }} 返回管理首页</a>
+</div>
+
+<div class="card">
+    <div class="card-title">{{ icons.icon('search') }} 筛选</div>
+    <form method="get" class="audit-filter-grid">
+        <input type="text" data-datepicker pattern="\d{4}-\d{2}-\d{2}" maxlength="10" name="start_date" value="{{ filters.get('start_date', '') }}" aria-label="开始日期">
+        <input type="text" data-datepicker pattern="\d{4}-\d{2}-\d{2}" maxlength="10" name="end_date" value="{{ filters.get('end_date', '') }}" aria-label="结束日期">
+        <select name="user_id" aria-label="用户">
+            <option value="">全部用户</option>
+            {% for user in users %}
+            <option value="{{ user.id }}" {% if filters.get('user_id')|string == user.id|string %}selected{% endif %}>{{ user.display_name }} ({{ user.username }})</option>
+            {% endfor %}
+        </select>
+        <select name="action" aria-label="操作">
+            <option value="">全部操作</option>
+            {% for action, label in actions.items() %}
+            <option value="{{ action }}" {% if filters.get('action') == action %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="target_type" aria-label="对象类型">
+            <option value="">全部对象</option>
+            {% for target_type in target_type_options %}
+            <option value="{{ target_type }}" {% if filters.get('target_type') == target_type %}selected{% endif %}>{{ target_type_labels.get(target_type, target_type) }}</option>
+            {% endfor %}
+        </select>
+        <input name="keyword" value="{{ filters.get('keyword', '') }}" placeholder="搜索对象或业务详情">
+        <button class="btn" type="submit">{{ icons.icon('search') }} 搜索</button>
+        <a class="btn btn-secondary" href="{{ url_for('admin_audit_logs') }}">{{ icons.icon('redo') }} 重置</a>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-title">{{ icons.icon('table') }} 记录列表</div>
+    <table class="audit-table">
+        <thead>
+            <tr>
+                <th>时间</th>
+                <th>用户</th>
+                <th>角色</th>
+                <th>操作</th>
+                <th>对象</th>
+                <th>业务详情</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                <td>{{ format_local_datetime(log.created_at) }}</td>
+                <td>{{ log.display_name_snapshot or log.username_snapshot or '-' }}</td>
+                <td>{{ '管理员' if log.role_snapshot == 'admin' else '普通用户' }}</td>
+                <td>{{ actions.get(log.action, log.action) }}</td>
+                <td class="audit-target-cell">
+                    <strong class="audit-target-label">{{ target_type_labels.get(log.target_type, log.target_type or '-') }}</strong>
+                    <span class="audit-target-name muted" title="{% if log.target_type == 'config' %}{{ config_key_labels.get(log.target_label, log.target_label) }}{% else %}{{ log.target_label or '-' }}{% endif %}">
+                        {% if log.target_type == 'config' %}{{ config_key_labels.get(log.target_label, log.target_label) }}{% else %}{{ log.target_label or '-' }}{% endif %}
+                    </span>
+                </td>
+                <td class="audit-metadata">
+                    {% set chips = format_audit_metadata(log.action, log.metadata_json) %}
+                    {% if chips %}
+                    <div class="audit-chips">
+                        {% for chip in chips %}
+                        <span class="audit-chip"><span class="audit-chip-label">{{ chip.label }}</span><span class="audit-chip-value">{{ chip.value }}</span></span>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <span class="muted">-</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="muted">暂无操作记录</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if pagination.pages > 1 %}
+    <div class="pagination">
+        {% if pagination.has_prev %}
+        <a class="btn btn-outline btn-sm" href="{{ url_for('admin_audit_logs', page=pagination.prev_num, **filters) }}">上一页</a>
+        {% endif %}
+        <span class="muted">第 {{ pagination.page }} / {{ pagination.pages }} 页</span>
+        {% if pagination.has_next %}
+        <a class="btn btn-outline btn-sm" href="{{ url_for('admin_audit_logs', page=pagination.next_num, **filters) }}">下一页</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

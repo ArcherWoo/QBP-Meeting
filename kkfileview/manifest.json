@@ -1,0 +1,15 @@
+{
+  "jre": {
+    "filename": "OpenJDK21U-jre_x64_windows_hotspot_latest.zip",
+    "sha256": "be26677aaa20b39a62edcaab4c8857a8b76673b0f45abc0b6143b142b62717e4",
+    "source": "https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jre/hotspot/normal/eclipse",
+    "version": "21"
+  },
+  "kkfileview": {
+    "filename": "kkFileView-5.0.0-windows-built.zip",
+    "office_runtime": "bundled-with-kkfileview-windows-package",
+    "sha256": "d097732a0c812e239e430f27128aa8d2355ed38befbfccfb090352af3c2a333d",
+    "source": "local-build-from kkFileView-5.0.0.zip",
+    "version": "5.0.0"
+  }
+}

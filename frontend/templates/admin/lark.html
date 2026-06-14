@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% import "macros/icons.html" as icons %}
+{% block title %}飞书配置 - QBP Meeting MGMT{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ icons.icon('send', 'icon-title') }} 飞书配置</h1>
+        <p class="muted">配置飞书自建应用，用于同步人员 open_id，并向会议主持人和议题创建者推送提醒。</p>
+    </div>
+</div>
+
+<div class="lark-layout">
+    <section class="card lark-config-card">
+        <div class="card-title">{{ icons.icon('settings') }} 应用凭证</div>
+        <form method="post" action="{{ url_for('admin_lark') }}" class="lark-config-form">
+            <label class="checkbox-line lark-enabled">
+                <input type="checkbox" name="enabled" value="1" {% if lark_config.enabled %}checked{% endif %}>
+                启用飞书推送
+            </label>
+            <div class="form-group">
+                <label>App ID</label>
+                <input name="app_id" value="{{ lark_config.app_id }}" placeholder="cli_xxx">
+            </div>
+            <div class="form-group">
+                <label>App Secret <span class="muted">({{ lark_secret_status }})</span></label>
+                <input name="app_secret" type="password" placeholder="{% if lark_config.app_secret %}留空则保留当前 Secret{% else %}请输入 App Secret{% endif %}">
+            </div>
+            <div class="form-group">
+                <label>接口地址</label>
+                <input name="api_base" value="{{ lark_config.api_base }}">
+            </div>
+            <div class="form-group">
+                <label>会前提醒天数</label>
+                <input name="reminder_days" type="number" min="1" max="30" value="{{ lark_config.reminder_days }}">
+            </div>
+            <div class="lark-actions">
+                <button class="btn" type="submit">{{ icons.icon('save') }} 保存配置</button>
+                <button class="btn btn-outline" type="submit" form="lark-test-form">{{ icons.icon('status-dot') }} 测试连接</button>
+            </div>
+        </form>
+        <form id="lark-test-form" method="post" action="{{ url_for('admin_lark_test') }}"></form>
+    </section>
+
+    <section class="card lark-action-card">
+        <div class="card-title">{{ icons.icon('magic') }} 手动任务</div>
+        <div class="lark-task-list">
+            <div class="lark-task">
+                <div>
+                    <strong>同步飞书人员</strong>
+                    <p class="muted">按用户邮箱拉取 open_id / user_id，后续推送会用 open_id 发送。</p>
+                </div>
+                <form method="post" action="{{ url_for('admin_lark_sync_users') }}">
+                    <button class="btn btn-outline" type="submit">{{ icons.icon('redo') }} 同步人员</button>
+                </form>
+            </div>
+            <div class="lark-task">
+                <div>
+                    <strong>发送缺材料提醒</strong>
+                    <p class="muted">扫描 {{ lark_config.reminder_days }} 天后召开的会议，提醒附件材料尚未上传的议题。</p>
+                </div>
+                <form method="post" action="{{ url_for('admin_lark_send_reminders') }}">
+                    <button class="btn btn-secondary" type="submit">{{ icons.icon('send') }} 发送提醒</button>
+                </form>
+            </div>
+        </div>
+    </section>
+</div>
+
+<section class="card">
+    <div class="card-title">{{ icons.icon('table') }} 人员同步状态</div>
+    <div class="table-scroll">
+        <table class="lark-user-table">
+            <thead>
+                <tr>
+                    <th>用户</th>
+                    <th>邮箱</th>
+                    <th>open_id</th>
+                    <th>user_id</th>
+                    <th>同步时间</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>
+                        <strong>{{ user.display_name }}</strong>
+                        <span class="muted">{{ user.username }}</span>
+                    </td>
+                    <td>{{ user.email or '-' }}</td>
+                    <td>{{ user.lark_open_id or '-' }}</td>
+                    <td>{{ user.lark_user_id or '-' }}</td>
+                    <td>{{ format_local_datetime(user.lark_synced_at) if user.lark_synced_at else '-' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="muted">暂无用户。</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="muted lark-user-hint">如需补充邮箱，请到 <a href="{{ url_for('admin_users') }}">权限管理</a> 编辑用户信息。</p>
+</section>
+{% endblock %}

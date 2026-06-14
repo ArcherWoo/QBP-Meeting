@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% import "macros/icons.html" as icons %}
+{% block title %}会议准备度配置 - QBP Meeting MGMT{% endblock %}
+{% block content %}
+{% set weights = readiness_config.weights %}
+{% set thresholds = readiness_config.thresholds %}
+<div class="page-header">
+    <div>
+        <h1>{{ icons.icon('settings', 'icon-title') }} 会议准备度配置</h1>
+        <p class="muted">配置会议准备程度的评分构成和分档阈值，保存后立即影响会议列表和会议准备度判断。</p>
+    </div>
+    <a class="btn btn-secondary" href="{{ url_for('admin_index') }}">{{ icons.icon('back') }} 返回管理首页</a>
+</div>
+
+<form method="post" class="config-layout">
+    <section class="card config-card">
+        <div class="card-title">{{ icons.icon('table') }} 评分构成</div>
+        <p class="muted config-help">两项权重合计必须等于 100。会议准备度按会议基础信息和平均议题完善度汇总计算；平均议题完善度是所有已审批议题完善度的普通平均值。</p>
+        <div class="config-grid readiness-weight-grid">
+            <label class="config-field">
+                <span>会议基础信息</span>
+                <input name="meeting_info_weight" value="{{ weights.meeting_info }}" type="number" min="0" max="100" required>
+            </label>
+            <label class="config-field">
+                <span>平均议题完善度</span>
+                <input name="topic_completeness_weight" value="{{ weights.topic_completeness }}" type="number" min="0" max="100" required>
+            </label>
+        </div>
+        <div class="config-total">
+            <span>当前合计</span>
+            <strong data-testid="weight-total">{{ weights.meeting_info + weights.topic_completeness }}</strong>
+        </div>
+    </section>
+
+    <section class="card config-card">
+        <div class="card-title">{{ icons.icon('dashboard') }} 分档阈值</div>
+        <p class="muted config-help">阈值必须满足：已就绪 > 基本就绪 > 准备中。</p>
+        <div class="config-grid">
+            <label class="config-field">
+                <span>已就绪</span>
+                <input name="ready_threshold" value="{{ thresholds.ready }}" type="number" min="0" max="100" required>
+            </label>
+            <label class="config-field">
+                <span>基本就绪</span>
+                <input name="mostly_ready_threshold" value="{{ thresholds.mostly_ready }}" type="number" min="0" max="100" required>
+            </label>
+            <label class="config-field">
+                <span>准备中</span>
+                <input name="preparing_threshold" value="{{ thresholds.preparing }}" type="number" min="0" max="100" required>
+            </label>
+        </div>
+        <div class="config-preview">
+            <span class="badge readiness-ready">≥ {{ thresholds.ready }} 已就绪</span>
+            <span class="badge readiness-mostly_ready">≥ {{ thresholds.mostly_ready }} 基本就绪</span>
+            <span class="badge readiness-preparing">≥ {{ thresholds.preparing }} 准备中</span>
+            <span class="badge readiness-risk">低于 {{ thresholds.preparing }} 风险</span>
+        </div>
+    </section>
+
+    <div class="config-actions">
+        <button class="btn btn-success" type="submit">{{ icons.icon('save') }} 保存配置</button>
+    </div>
+</form>
+{% endblock %}

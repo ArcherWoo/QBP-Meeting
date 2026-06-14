@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% import "macros/icons.html" as icons %}
+{% block title %}议题编排 - QBP Meeting MGMT{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ icons.icon('list', 'icon-title') }} 议题编排</h1>
+        <p class="muted">挑选议题池中的议题，拖入会议议题并排序。</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-title">{{ icons.icon('meeting') }} 可编排的会议</div>
+    {% if not rows %}
+    <p class="muted">当前没有可编排的会议（仅显示状态为草稿或准备中的会议）。</p>
+    {% else %}
+    <div class="table-scroll meeting-table-wrap">
+        <table class="meeting-table agenda-list-table">
+            <thead>
+                <tr>
+                    <th>会议编号</th>
+                    <th>标题</th>
+                    <th>会议日期</th>
+                    <th>状态</th>
+                    <th>议题数量</th>
+                    <th>待编排池</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>{{ row.meeting.meeting_no }}</td>
+                    <td><span class="table-cell-ellipsis">{{ row.meeting.title }}</span></td>
+                    <td>{{ row.meeting.meeting_date.strftime('%Y-%m-%d') }}</td>
+                    <td>{{ meeting_status_labels.get(row.meeting.status, row.meeting.status) }}</td>
+                    <td>{{ row.bound_count }}</td>
+                    <td>{{ row.pool_count }}</td>
+                    <td>
+                        <a class="btn btn-outline" href="{{ url_for('agenda_board', meeting_no=row.meeting.meeting_no) }}">
+                            {{ icons.icon('edit') }} 进入编排
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+</file_content>

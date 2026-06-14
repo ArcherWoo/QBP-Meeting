@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% import "macros/icons.html" as icons %}
+{% set is_edit = meeting is defined and meeting %}
+{% block title %}{{ '更改会议' if is_edit else '创建会议' }} - QBP Meeting MGMT{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ icons.icon('plus-circle', 'icon-title') }} {{ '更改会议' if is_edit else '创建会议' }}</h1>
+        <p class="muted">{{ '更新会议基础信息' if is_edit else '填写会议基础信息' }}</p>
+    </div>
+    <a href="{{ url_for('meeting_list') }}" class="btn btn-secondary">{{ icons.icon('back') }} 返回列表</a>
+</div>
+
+<form method="post" action="{{ url_for('meeting_edit', meeting_no=meeting.meeting_no) if is_edit else url_for('meeting_create') }}">
+    <div class="card">
+        <div class="card-title">会议基础信息</div>
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label>会议标题</label>
+                <input name="title" value="{{ meeting.title if is_edit else 'Q3 26BP POR Review' }}" required>
+            </div>
+            <div class="form-group">
+                <label>会议日期</label>
+                <input name="meeting_date" type="text" data-datepicker pattern="\d{4}-\d{2}-\d{2}" maxlength="10" value="{{ meeting.meeting_date.strftime('%Y-%m-%d') if is_edit else '' }}" required>
+            </div>
+            <div class="form-group">
+                <label>地点 / 方式</label>
+                <input name="location" value="{{ meeting.location if is_edit else '' }}" placeholder="会议室 / Teams">
+            </div>
+            <div class="form-group">
+                <label>主持人</label>
+                <input name="host" value="{{ meeting.host if is_edit else '' }}" placeholder="PLN/BP">
+            </div>
+            <div class="form-group">
+                <label>会议状态</label>
+                <select name="status">
+                    <option value="draft" {% if is_edit and meeting.status == 'draft' %}selected{% endif %}>草稿</option>
+                    <option value="preparing" {% if (is_edit and meeting.status == 'preparing') or not is_edit %}selected{% endif %}>准备中</option>
+                    <option value="reporting" {% if is_edit and meeting.status == 'reporting' %}selected{% endif %}>汇报中</option>
+                    <option value="completed" {% if is_edit and meeting.status == 'completed' %}selected{% endif %}>已完成</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Plan Version</label>
+                <select name="plan_version_id" data-plan-version-select>
+                    {% for option in plan_version_options %}
+                    <option value="{{ option.id }}" {% if (is_edit and meeting.plan_version_id == option.id) or (not is_edit and loop.first) %}selected{% endif %}>{{ option.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Round</label>
+                <select name="plan_round_id" data-plan-round-select>
+                    {% set selected_version_id = meeting.plan_version_id if is_edit else (plan_version_options[0].id if plan_version_options else none) %}
+                    {% for option in round_options_for_version(selected_version_id) %}
+                    <option value="{{ option.id }}" {% if (is_edit and meeting.plan_round_id == option.id) or (not is_edit and loop.first) %}selected{% endif %}>{{ option.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>类别</label>
+                <select name="category">
+                    {% for option in topic_category_options %}
+                    <option value="{{ option }}" {% if (is_edit and meeting.category == option) or (not is_edit and option == 'POR Review') %}selected{% endif %}>{{ option }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+
+    {% if not is_edit %}
+    <div class="card">
+        <div class="card-title">可选议题</div>
+        <div id="topicRows" class="optional-topic-rows">
+        </div>
+        <div class="split-actions">
+            <button class="btn btn-outline" type="button" onclick="addTopicRow()">{{ icons.icon('plus') }} 添加议题</button>
+            <button class="btn btn-success" type="submit">{{ icons.icon('save') }} 创建会议</button>
+        </div>
+    </div>
+    {% else %}
+    <div class="split-actions">
+        <button class="btn btn-success" type="submit">{{ icons.icon('save') }} 保存更改</button>
+    </div>
+    {% endif %}
+</form>
+{% endblock %}
+{% block extra_js %}
+<script>
+function addTopicRow() {
+    const rows = document.getElementById('topicRows');
+    const next = rows.querySelectorAll('.topic-row').length + 1;
+    const div = document.createElement('div');
+    div.className = 'topic-row';
+    div.innerHTML = `
+        <input name="topic_title[]" placeholder="例：OP Cum Yields">
+        <input name="topic_owner[]" placeholder="汇报人">
+        <div class="duration-stepper duration-stepper-integrated topic-row-duration" data-duration-stepper>
+            <button type="button" class="duration-stepper-button" data-duration-step="-5" aria-label="减少 5 分钟">-</button>
+            <input name="topic_duration_minutes[]" type="text" inputmode="numeric" pattern="[0-9]*" value="{{ topic_duration_default_minutes }}" data-duration-input aria-label="议题时长">
+            <button type="button" class="duration-stepper-button" data-duration-step="5" aria-label="增加 5 分钟">+</button>
+            <span class="duration-stepper-unit">分钟</span>
+        </div>
+        <input name="topic_order[]" placeholder="顺序" value="${next}">
+        <button class="btn btn-secondary btn-sm" type="button" onclick="removeTopicRow(this)"><span class="svg-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M6 6l12 12M18 6L6 18"></path></svg></span></button>
+    `;
+    rows.appendChild(div);
+}
+function removeTopicRow(button) {
+    button.closest('.topic-row').remove();
+}
+</script>
+{% endblock %}

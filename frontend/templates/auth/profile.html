@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% import "macros/icons.html" as icons %}
+{% block title %}个人信息 - QBP Meeting MGMT{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ icons.icon('user', 'icon-title') }} 个人信息</h1>
+        <p class="muted">当前登录账号信息</p>
+    </div>
+</div>
+<div class="card">
+    <table>
+        <tr><td>用户名</td><td>{{ current_user.username }}</td></tr>
+        <tr><td>显示名称</td><td>{{ current_user.display_name }}</td></tr>
+        <tr><td>角色</td><td>{{ current_user.role }}</td></tr>
+    </table>
+</div>
+<div class="card">
+    <h2 style="font-size:18px;margin-bottom:16px;">{{ icons.icon('key', 'icon-title') }} 修改密码</h2>
+    <form method="post" action="{{ url_for('change_password') }}">
+        <div class="form-group"><label>旧密码</label><input name="old_password" type="password" required></div>
+        <div class="form-group"><label>新密码</label><input name="new_password" type="password" required></div>
+        <div class="form-group"><label>确认新密码</label><input name="confirm_password" type="password" required></div>
+        <button class="btn" type="submit">{{ icons.icon('save') }} 保存</button>
+    </form>
+</div>
+{% endblock %}

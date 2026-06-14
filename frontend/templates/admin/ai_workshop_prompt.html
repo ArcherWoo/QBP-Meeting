@@ -1,0 +1,408 @@
+{% extends "base.html" %}
+{% import "macros/icons.html" as icons %}
+{% block title %}AI Review 提示词库 - QBP Meeting MGMT{% endblock %}
+{% block content %}
+{% set prompt = selected_prompt %}
+{% set options = prompt.normalized_output_options if prompt else output_defaults %}
+<div class="page-header">
+    <div>
+        <h1>{{ icons.icon('magic', 'icon-title') }} AI Review 提示词库</h1>
+        <p class="muted">一套模板 = 适用场景 + 知识来源 + 补充评审口径 + 输出要求。知识沉淀在知识库维护，模板负责选择导入哪些知识。</p>
+    </div>
+    <div class="page-header-actions">
+        <a class="btn btn-secondary" href="{{ url_for('ai_workshop_knowhow') }}">{{ icons.icon('table') }} 知识沉淀</a>
+        <a class="btn btn-outline" href="{{ url_for('ai_workshop_prompt', mode='new') }}">{{ icons.icon('plus') }} 新建模板</a>
+    </div>
+</div>
+
+<div class="aiw-library-layout">
+    <aside class="card aiw-template-list">
+        <div class="card-title">{{ icons.icon('drafts') }} 模板库</div>
+        {% if prompts %}
+        <div class="aiw-template-items">
+            {% for item in prompts %}
+            <a class="aiw-template-item {% if prompt and item.id == prompt.id %}active{% endif %}" href="{{ url_for('ai_workshop_prompt', prompt_id=item.id) }}">
+                <span class="aiw-template-name">{{ item.name }}</span>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="muted" style="margin:0;">暂无模板。右侧保存后会出现在这里。</p>
+        {% endif %}
+    </aside>
+
+    <form method="post" class="card aiw-template-editor" id="aiw-prompt-form">
+        {% if prompt %}<input type="hidden" name="prompt_id" value="{{ prompt.id }}">{% endif %}
+        <div class="aiw-editor-hero">
+            <div class="aiw-editor-hero-main">
+                <span class="aiw-editor-kicker">{{ icons.icon('edit') }} 模板编辑</span>
+                <h2>{% if prompt %}{{ prompt.name }}{% else %}新建模板{% endif %}</h2>
+                <div class="aiw-dash-badges">
+                    <span class="aiw-scope-badge" id="aiw-scope-badge" data-scope="{{ prompt.scope if prompt else 'GLOBAL' }}">
+                        {{ icons.icon('layers') }}<span id="aiw-scope-badge-text">{{ prompt.scope_label if prompt else '通用模板' }}</span>
+                    </span>
+                    <span class="aiw-state-badge {% if not prompt or prompt.is_active %}is-custom{% else %}is-default{% endif %}" id="aiw-active-badge">
+                        {{ icons.icon('status-dot') }}<span id="aiw-active-badge-text">{% if not prompt or prompt.is_active %}启用中{% else %}已停用{% endif %}</span>
+                    </span>
+                    <span class="aiw-state-badge {% if prompt and prompt.is_default %}is-custom{% else %}is-default{% endif %}" id="aiw-default-badge">
+                        {{ icons.icon('shield') }}<span id="aiw-default-badge-text">{% if prompt and prompt.is_default %}范围默认{% else %}非默认{% endif %}</span>
+                    </span>
+                </div>
+            </div>
+            <div class="aiw-editor-hero-side">
+                <div class="aiw-lint" id="aiw-lint">
+                    <span class="aiw-lint-chip" data-check="goal">评审目标</span>
+                    <span class="aiw-lint-chip" data-check="sources">知识来源</span>
+                    <span class="aiw-lint-chip" data-check="outputs">输出要求</span>
+                </div>
+                <span class="aiw-count-pill" id="aiw-charcount">0 字</span>
+            </div>
+        </div>
+
+        <div class="aiw-editor-grid">
+            <section class="aiw-prompt-section aiw-basic-panel">
+                <div class="aiw-section-head">
+                    <h3>基础信息</h3>
+                </div>
+                <div class="form-grid two">
+                    <div class="form-group">
+                        <label>模板名称</label>
+                        <input name="name" required value="{{ prompt.name if prompt else '' }}" placeholder="例：MC POR Review 材料评审">
+                    </div>
+                    <div class="form-group">
+                        <label>适用范围</label>
+                        <select name="scope" id="aiw-scope">
+                            <option value="GLOBAL" {% if prompt and prompt.scope == 'GLOBAL' %}selected{% endif %}>通用模板</option>
+                            {% for scope in business_scope_options %}
+                            {% set scope_name = scope.name if scope.name is defined else scope %}
+                            <option value="{{ scope_name }}" {% if prompt and prompt.scope == scope_name %}selected{% endif %}>{{ scope_name }} 专属模板</option>
+                            {% endfor %}
+                            <option value="CUSTOM" {% if prompt and prompt.scope == 'CUSTOM' %}selected{% endif %}>专项模板</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group" id="aiw-special-row">
+                    <label>专项名称</label>
+                    <input name="special_label" value="{{ prompt.special_label if prompt else '' }}" placeholder="例：Q3 POR Review / ST Meeting">
+                </div>
+            </section>
+
+            <section class="aiw-prompt-section aiw-knowledge-panel">
+                <div class="aiw-section-head">
+                    <h3>知识来源</h3>
+                    <span class="aiw-source-hint">按范围取用</span>
+                </div>
+                <div class="aiw-source-picker">
+                    {% set global_selected_category = selected_knowledge_source_categories.get('GLOBAL') %}
+                    {% set selected_business_scope = namespace(value='') %}
+                    {% for option in knowledge_source_options if option.scope != 'GLOBAL' %}
+                        {% if not selected_business_scope.value and option.scope in selected_knowledge_source_scopes %}
+                            {% set selected_business_scope.value = option.scope %}
+                        {% endif %}
+                    {% endfor %}
+                    {% if not selected_business_scope.value %}
+                        {% for option in knowledge_source_options if option.scope != 'GLOBAL' %}
+                            {% if not selected_business_scope.value %}
+                                {% set selected_business_scope.value = option.scope %}
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                    <div class="aiw-source-global">
+                        <label class="aiw-source-toggle aiw-source-toggle-global">
+                            <input type="checkbox" name="knowledge_sources" value="GLOBAL"
+                                   {% if 'GLOBAL' in selected_knowledge_source_scopes %}checked{% endif %}>
+                            <span class="aiw-source-code">通用</span>
+                        </label>
+                        <select class="aiw-global-category-select" name="knowledge_category_GLOBAL" aria-label="通用 分类">
+                            <option value="" {% if global_selected_category is none %}selected{% endif %}>全部</option>
+                            {% for category in knowledge_source_options[0].categories %}
+                            <option value="{{ category.id }}" {% if global_selected_category == category.id %}selected{% endif %}>{{ category.name }}</option>
+                            {% endfor %}
+                            <option value="0" {% if global_selected_category == 0 %}selected{% endif %}>未分类</option>
+                        </select>
+                    </div>
+
+                    <div class="aiw-business-source-row">
+                        <div class="aiw-business-source-hidden">
+                            {% for option in knowledge_source_options if option.scope != 'GLOBAL' %}
+                            <input type="checkbox"
+                                   class="aiw-business-source-checkbox"
+                                   name="knowledge_sources"
+                                   value="{{ option.scope }}"
+                                   {% if option.scope == selected_business_scope.value and option.scope in selected_knowledge_source_scopes %}checked{% endif %}>
+                            {% endfor %}
+                        </div>
+                        <select class="aiw-business-source-select" aria-label="业务组">
+                            {% for option in knowledge_source_options if option.scope != 'GLOBAL' %}
+                            <option value="{{ option.scope }}" {% if option.scope == selected_business_scope.value %}selected{% endif %}>{{ option.scope }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="aiw-business-category-stack">
+                            {% for option in knowledge_source_options if option.scope != 'GLOBAL' %}
+                            {% set selected_category = selected_knowledge_source_categories.get(option.scope) %}
+                            <select class="aiw-business-category-select"
+                                    name="knowledge_category_{{ option.scope }}"
+                                    aria-label="{{ option.scope }} 分类"
+                                    data-scope="{{ option.scope }}"
+                                    {% if option.scope != selected_business_scope.value %}disabled hidden{% endif %}>
+                                <option value="" {% if selected_category is none %}selected{% endif %}>全部分类</option>
+                                {% for category in option.categories %}
+                                <option value="{{ category.id }}" {% if selected_category == category.id %}selected{% endif %}>{{ category.name }}</option>
+                                {% endfor %}
+                                <option value="0" {% if selected_category == 0 %}selected{% endif %}>未分类</option>
+                            </select>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <section class="aiw-prompt-section aiw-content-panel">
+            <div class="aiw-section-head">
+                <h3>评审内容</h3>
+            </div>
+            <div class="aiw-content-grid">
+                <div class="form-group aiw-section-field">
+                    <label>评审目标</label>
+                    <textarea name="review_goal" rows="7" class="aiw-goal-textarea" required placeholder="说明这个模板希望 AI 帮业务判断什么，例如：判断BP材料是否说明指标变化、gap、行动计划和风险兜底。">{{ prompt.review_goal if prompt else '' }}</textarea>
+                </div>
+                <div class="form-group aiw-section-field">
+                    <label>补充评审口径</label>
+                    <textarea name="focus_points" rows="5" class="aiw-focus-textarea" placeholder="只填写这个模板特有的判断口径，例如：Cum Yields低于BP需说明root cause和recovery plan；CS时间变动需说明milestone和owner。通用 know-how 会从上方知识来源自动导入。">{{ prompt.focus_points if prompt else '' }}</textarea>
+                </div>
+            </div>
+        </section>
+
+        <div class="aiw-editor-grid aiw-editor-grid-bottom">
+            <fieldset class="aiw-prompt-section aiw-output-box aiw-output-compact">
+                <legend>输出要求</legend>
+                <label><input type="checkbox" name="include_score" value="1" {% if options.include_score %}checked{% endif %}> 需要评分</label>
+                <label><input type="checkbox" name="include_issues" value="1" {% if options.include_issues %}checked{% endif %}> 需要问题点</label>
+                <label><input type="checkbox" name="include_suggestions" value="1" {% if options.include_suggestions %}checked{% endif %}> 需要改进建议</label>
+                <label><input type="checkbox" name="include_risk_points" value="1" {% if options.include_risk_points %}checked{% endif %}> 需要风险点</label>
+            </fieldset>
+
+            <div class="aiw-prompt-section aiw-toggle-row">
+                <label><input type="checkbox" name="is_active" value="1" {% if not prompt or prompt.is_active %}checked{% endif %}> 启用模板</label>
+                <label><input type="checkbox" name="set_default" value="1" {% if prompt and prompt.is_default %}checked{% endif %}> 设为该范围默认</label>
+            </div>
+        </div>
+
+        <div class="aiw-editor-footer">
+            <div class="aiw-actions">
+                <button class="btn btn-success" type="submit">{{ icons.icon('save') }} 保存模板</button>
+                {% if prompt %}
+                <button class="btn btn-secondary" type="submit"
+                        form="aiw-delete-form"
+                        onclick="return confirm('确认删除这个提示词模板？删除后不可恢复。');">
+                    {{ icons.icon('trash') }} 删除模板
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+    {% if prompt %}
+    <form id="aiw-delete-form" method="post" action="{{ url_for('ai_workshop_prompt_delete', prompt_id=prompt.id) }}"></form>
+    {% endif %}
+</div>
+
+<section class="card aiw-preview-card">
+    <div class="card-title card-title-action">
+        <span>{{ icons.icon('eye') }} 实时预览</span>
+        <button class="btn btn-outline btn-sm" type="button" id="aiw-preview-toggle">展开</button>
+    </div>
+    <p class="muted" style="font-size:12px;margin:0 0 4px;">预览 AI 实际收到的系统消息。输出格式要求由系统自动拼接，业务用户无需编辑技术格式。</p>
+    <div class="aiw-preview-body" id="aiw-preview-body">
+        <div class="aiw-terminal">
+            <div class="aiw-terminal-bar">
+                <span class="aiw-dot red"></span><span class="aiw-dot amber"></span><span class="aiw-dot green"></span>
+                <span class="aiw-terminal-title">system_prompt.preview</span>
+            </div>
+            <pre class="aiw-preview-out" id="aiw-preview-out">{{ rendered_preview }}</pre>
+        </div>
+    </div>
+</section>
+
+<section class="card">
+    <div class="card-title">{{ icons.icon('redo') }} 修改记录</div>
+    {% if history %}
+    <ol class="aiw-timeline">
+        {% for h in history %}
+        <li class="aiw-tl-item">
+            <span class="aiw-tl-node"></span>
+            <div class="aiw-tl-body">
+                <div class="aiw-tl-head">
+                    <span class="aiw-tl-who">{{ icons.icon('user') }}{{ h.display_name_snapshot or h.username_snapshot or '系统' }}</span>
+                    <span class="aiw-tl-when">{{ icons.icon('clock') }}{{ format_local_datetime(h.created_at) }}</span>
+                </div>
+                <span class="aiw-tl-target">{{ h.target_label }}</span>
+            </div>
+        </li>
+        {% endfor %}
+    </ol>
+    {% else %}
+    <p class="muted" style="margin:0;">暂无修改记录。保存模板后，每次改动都会在这里留痕。</p>
+    {% endif %}
+</section>
+
+<script>
+(function(){
+    var form = document.getElementById('aiw-prompt-form');
+    if (!form) return;
+    var scope = document.getElementById('aiw-scope');
+    var specialRow = document.getElementById('aiw-special-row');
+    var countEl = document.getElementById('aiw-charcount');
+    var previewOut = document.getElementById('aiw-preview-out');
+    var previewBody = document.getElementById('aiw-preview-body');
+    var previewToggle = document.getElementById('aiw-preview-toggle');
+    var lintEl = document.getElementById('aiw-lint');
+    var scopeBadge = document.getElementById('aiw-scope-badge');
+    var scopeBadgeText = document.getElementById('aiw-scope-badge-text');
+    var activeBadge = document.getElementById('aiw-active-badge');
+    var activeBadgeText = document.getElementById('aiw-active-badge-text');
+    var defaultBadge = document.getElementById('aiw-default-badge');
+    var defaultBadgeText = document.getElementById('aiw-default-badge-text');
+    var businessSourceSelect = form.querySelector('.aiw-business-source-select');
+    var businessSourceCheckboxes = Array.prototype.slice.call(form.querySelectorAll('.aiw-business-source-checkbox'));
+    var businessCategorySelects = Array.prototype.slice.call(form.querySelectorAll('.aiw-business-category-select'));
+    var scopeLabels = { GLOBAL: '通用模板', CUSTOM: '专项模板' };
+    {% for scope in business_scope_options %}
+    {% set scope_name = scope.name if scope.name is defined else scope %}
+    scopeLabels[{{ scope_name|tojson }}] = {{ (scope_name ~ ' 专属模板')|tojson }};
+    {% endfor %}
+    var fields = Array.prototype.slice.call(form.querySelectorAll('input, textarea, select'));
+
+    function checked(name) {
+        var el = form.querySelector('[name="' + name + '"]');
+        return !!(el && el.checked);
+    }
+    function value(name) {
+        var el = form.querySelector('[name="' + name + '"]');
+        return el ? el.value : '';
+    }
+    function selectedSources() {
+        return Array.prototype.slice.call(form.querySelectorAll('[name="knowledge_sources"]:checked')).map(function(el){ return el.value; });
+    }
+    function selectedSourceLabels() {
+        if (!businessSourceSelect) return [];
+        var selectedScope = businessSourceSelect.value;
+        var checkbox = businessSourceCheckboxes.filter(function(item){ return item.value === selectedScope && item.checked; })[0];
+        if (!checkbox) return [];
+        var select = businessCategorySelects.filter(function(item){ return item.getAttribute('data-scope') === selectedScope; })[0];
+        var categoryName = select && select.selectedOptions.length ? select.selectedOptions[0].textContent : '全部分类';
+        return [selectedScope + ' / ' + categoryName.trim()];
+    }
+    function selectedGlobalLabel() {
+        var globalRow = form.querySelector('.aiw-source-global');
+        if (!globalRow) return null;
+        var checkbox = globalRow.querySelector('[name="knowledge_sources"]');
+        if (!checkbox || !checkbox.checked) return null;
+        var select = globalRow.querySelector('select');
+        var categoryName = select && select.selectedOptions.length ? select.selectedOptions[0].textContent : '全部';
+        return '通用 / ' + categoryName.trim();
+    }
+    function render(){
+        var selectedScope = value('scope');
+        if (specialRow) specialRow.style.display = selectedScope === 'CUSTOM' ? '' : 'none';
+        var businessText = [value('review_goal'), value('focus_points')].join('');
+        if (countEl) countEl.textContent = businessText.length + ' 字';
+        if (scopeBadge) {
+            scopeBadge.setAttribute('data-scope', selectedScope);
+            var specialName = value('special_label');
+            if (scopeBadgeText) scopeBadgeText.textContent = (selectedScope === 'CUSTOM' && specialName) ? specialName : (scopeLabels[selectedScope] || selectedScope);
+        }
+        if (activeBadge && activeBadgeText) {
+            var on = checked('is_active');
+            activeBadge.classList.toggle('is-custom', on);
+            activeBadge.classList.toggle('is-default', !on);
+            activeBadgeText.textContent = on ? '启用中' : '已停用';
+        }
+        if (defaultBadge && defaultBadgeText) {
+            var def = checked('set_default');
+            defaultBadge.classList.toggle('is-custom', def);
+            defaultBadge.classList.toggle('is-default', !def);
+            defaultBadgeText.textContent = def ? '范围默认' : '非默认';
+        }
+        var fallbackScope = Object.keys(scopeLabels).filter(function(key){ return ['GLOBAL', 'CUSTOM'].indexOf(key) === -1; })[0] || 'MC';
+        var sampleScope = ['GLOBAL', 'CUSTOM'].indexOf(selectedScope) === -1 ? selectedScope : fallbackScope;
+        var sources = selectedSources();
+        var sourceLabels = selectedSourceLabels();
+        var globalLabel = selectedGlobalLabel();
+        if (!sources.length && ['GLOBAL', 'CUSTOM'].indexOf(selectedScope) === -1) {
+            sources = [selectedScope];
+            sourceLabels = [selectedScope + ' / 全部'];
+        }
+        if (!sources.length) {
+            sources = ['GLOBAL', fallbackScope];
+            sourceLabels = ['通用 / 全部', fallbackScope + ' / 全部'];
+        } else if (globalLabel) {
+            sourceLabels = [globalLabel].concat(sourceLabels);
+        }
+        var outputs = ['result', 'summary'];
+        if (checked('include_score')) outputs.push('score');
+        if (checked('include_issues')) outputs.push('issues');
+        if (checked('include_suggestions')) outputs.push('suggestions');
+        if (checked('include_risk_points')) outputs.push('risk_points');
+        if (previewOut) {
+            previewOut.textContent = [
+                '你是 QBP Meeting 材料 Review 助手。',
+                '当前议题「POR Review 材料评审」的业务上下文为 ' + sampleScope + '。',
+                '【评审目标】\n' + (value('review_goal') || '（请填写评审目标）'),
+                '【补充评审口径】\n' + (value('focus_points') || '按模板知识来源和议题材料完整度进行评审。'),
+                '【模板导入的 know-how】\n' + sourceLabels.map(function(label){ return '- [' + label + '] 示例 know-how：按所选来源沉淀的业务关注点评审。'; }).join('\n'),
+                '【输出格式要求】\n系统会按结构化结果返回：' + outputs.join(' / ')
+            ].join('\n\n');
+        }
+        if (lintEl) {
+            var goalOk = value('review_goal').trim().length > 0;
+            var sourceOk = selectedSources().length > 0;
+            var outputOk = outputs.length > 2;
+            var goalChip = lintEl.querySelector('[data-check="goal"]');
+            var sourceChip = lintEl.querySelector('[data-check="sources"]');
+            var outputChip = lintEl.querySelector('[data-check="outputs"]');
+            if (goalChip) {
+                goalChip.classList.toggle('is-ok', goalOk);
+                goalChip.classList.toggle('is-missing', !goalOk);
+            }
+            if (sourceChip) {
+                sourceChip.classList.toggle('is-ok', sourceOk);
+                sourceChip.classList.toggle('is-missing', !sourceOk);
+            }
+            if (outputChip) {
+                outputChip.classList.toggle('is-ok', outputOk);
+                outputChip.classList.toggle('is-missing', !outputOk);
+            }
+        }
+    }
+    function syncBusinessSource() {
+        if (!businessSourceSelect) return;
+        var selectedScope = businessSourceSelect.value;
+        businessSourceCheckboxes.forEach(function(checkbox){
+            checkbox.checked = checkbox.value === selectedScope;
+        });
+        businessCategorySelects.forEach(function(select){
+            var active = select.getAttribute('data-scope') === selectedScope;
+            select.disabled = !active;
+            select.hidden = !active;
+        });
+    }
+    fields.forEach(function(el){ el.addEventListener('input', render); el.addEventListener('change', render); });
+    if (businessSourceSelect) {
+        businessSourceSelect.addEventListener('change', function(){
+            syncBusinessSource();
+            render();
+        });
+    }
+    syncBusinessSource();
+    render();
+
+    if (previewToggle && previewBody) {
+        previewToggle.addEventListener('click', function(){
+            var open = previewBody.classList.toggle('is-open');
+            previewToggle.textContent = open ? '收起' : '展开';
+        });
+    }
+})();
+</script>
+{% endblock %}

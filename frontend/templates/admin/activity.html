@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% import "macros/icons.html" as icons %}
+{% block title %}活跃统计 - QBP Meeting MGMT{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ icons.icon('dashboard', 'icon-title') }} 活跃统计</h1>
+        <p class="muted">按系统时区统计用户活跃、操作量和最近 30 天活跃用户</p>
+    </div>
+    <a class="btn btn-secondary" href="{{ url_for('admin_index') }}">{{ icons.icon('back') }} 返回管理首页</a>
+</div>
+
+<div class="activity-dashboard-grid">
+    <div class="card activity-metric-card">
+        <div class="activity-metric-label">今日活跃用户</div>
+        <strong data-testid="dau">{{ activity.dau }}</strong>
+        <span>今日去重用户</span>
+    </div>
+    <div class="card activity-metric-card">
+        <div class="activity-metric-label">本月活跃用户</div>
+        <strong data-testid="mau">{{ activity.mau }}</strong>
+        <span>本月去重用户</span>
+    </div>
+    <div class="card activity-metric-card activity-metric-total">
+        <div class="activity-metric-label">历史活跃用户</div>
+        <strong data-testid="total-active-users">{{ activity.total_active_users }}</strong>
+        <span>历史去重用户</span>
+    </div>
+    <div class="card activity-metric-card">
+        <div class="activity-metric-label">今日操作数</div>
+        <strong>{{ activity.today_operations }}</strong>
+        <span>今日活跃操作</span>
+    </div>
+    <div class="card activity-metric-card">
+        <div class="activity-metric-label">本月操作数</div>
+        <strong>{{ activity.month_operations }}</strong>
+        <span>本月活跃操作</span>
+    </div>
+    <div class="card activity-metric-card activity-metric-total">
+        <div class="activity-metric-label">历史操作总数</div>
+        <strong data-testid="total-operations">{{ activity.total_operations }}</strong>
+        <span>历史活跃操作</span>
+    </div>
+</div>
+
+<div class="card activity-chart-card">
+    <div class="card-title card-title-action">
+        <span>{{ icons.icon('dashboard') }} 近 14 天趋势</span>
+        <div class="activity-chart-legend" aria-label="图例">
+            <span><i class="activity-legend-dot active"></i>活跃用户</span>
+            <span><i class="activity-legend-dot operations"></i>操作数</span>
+        </div>
+    </div>
+    <div class="activity-chart-summary">
+        <span>14 天活跃人次 <strong>{{ activity.trend_totals.active_users }}</strong></span>
+        <span>14 天操作数 <strong>{{ activity.trend_totals.operations }}</strong></span>
+        <span>峰值日期 <strong>{{ activity.trend_totals.peak_date.strftime('%m-%d') if activity.trend_totals.peak_date else '-' }}</strong></span>
+    </div>
+    {% set max_active = activity.daily_trends[0].max_active if activity.daily_trends else 1 %}
+    {% set max_operations = activity.daily_trends[0].max_operations if activity.daily_trends else 1 %}
+    <div class="activity-combo-chart" aria-label="近 14 天活跃趋势">
+        <div class="activity-axis activity-axis-left" aria-label="活跃用户坐标轴">
+            <span>{{ max_active }}</span>
+            <span>{{ (max_active / 2)|round(0, 'ceil')|int }}</span>
+            <span>0</span>
+            <em>活跃用户</em>
+        </div>
+        <div class="activity-chart-plot">
+            <div class="activity-grid-lines" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+            <div class="activity-bars-layer" aria-hidden="true">
+                {% for row in activity.daily_trends %}
+                <div class="activity-bar-slot">
+                    <span class="activity-operation-bar{% if row.operations == 0 %} empty{% endif %}" style="height: {{ row.operation_percent if row.operations else 2 }}%">
+                        {% if row.operations %}<b>{{ row.operations }}</b>{% endif %}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+            <svg class="activity-active-line" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <polyline points="{% for row in activity.daily_trends %}{{ row.line_x }},{{ row.line_y }} {% endfor %}" />
+            </svg>
+            <div class="activity-points-layer" aria-hidden="true">
+                {% for row in activity.daily_trends %}
+                <span class="activity-line-point" style="left: {{ row.line_x }}%; top: {{ row.line_y }}%;">
+                    {% if row.active_users %}<b>{{ row.active_users }}</b>{% endif %}
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="activity-axis activity-axis-right" aria-label="操作数坐标轴">
+            <span>{{ max_operations }}</span>
+            <span>{{ (max_operations / 2)|round(0, 'ceil')|int }}</span>
+            <span>0</span>
+            <em>操作数</em>
+        </div>
+        <div class="activity-chart-dates">
+            {% for row in activity.daily_trends %}
+            <span>{{ row.date.strftime('%m-%d') }}</span>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="card activity-users-card">
+    <div class="card-title">{{ icons.icon('user') }} 近 30 天活跃用户排行</div>
+    <table class="activity-user-table">
+        <thead>
+            <tr>
+                <th>用户</th>
+                <th>角色</th>
+                <th>操作次数</th>
+                <th>最后活跃</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in activity.top_users %}
+            <tr>
+                <td>
+                    <strong>{{ row.display_name_snapshot or row.username_snapshot }}</strong>
+                    <div class="muted">{{ row.username_snapshot }}</div>
+                </td>
+                <td>{{ '管理员' if row.role_snapshot == 'admin' else '普通用户' }}</td>
+                <td><span class="activity-count">{{ row.operation_count }}</span></td>
+                <td>{{ format_local_datetime(row.last_active) }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="muted">暂无活跃数据</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

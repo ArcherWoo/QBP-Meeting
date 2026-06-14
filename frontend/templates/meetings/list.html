@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% import "macros/icons.html" as icons %}
+{% block title %}会议列表 - QBP Meeting MGMT{% endblock %}
+{% set copilot_page_context = 'meeting_list' %}
+{% set copilot_page_meeting_nos = meetings|map(attribute='meeting_no')|list %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ icons.icon('list', 'icon-title') }} 会议列表</h1>
+        <p class="muted">管理 QBP Meeting 与议题材料</p>
+    </div>
+    <div class="page-header-actions">
+        <button class="btn btn-outline copilot-header-trigger" type="button" data-copilot-open title="打开 Copilot">
+            {{ icons.icon('magic', 'icon-copilot') }} Copilot
+        </button>
+        {% if can_manage_meetings() %}
+        <a href="{{ url_for('meeting_create') }}" class="btn btn-success">{{ icons.icon('plus-circle') }} 创建会议</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-title">{{ icons.icon('search') }} 搜索与筛选</div>
+    <form method="get" class="meeting-filter-grid">
+        <input class="meeting-filter-control meeting-title-search" name="search" placeholder="搜索会议标题" value="{{ filters.raw.get('search', '') }}">
+        <div class="meeting-filter-control date-range-picker" data-date-range-label="会议日期">
+            <button class="date-range-trigger" type="button">
+                <span class="date-range-title">会议日期</span>
+                <span class="date-range-value" data-empty="">
+                    {% if filters.raw.get('meeting_date_start') or filters.raw.get('meeting_date_end') %}
+                    {{ filters.raw.get('meeting_date_start', '开始') or '开始' }} 至 {{ filters.raw.get('meeting_date_end', '结束') or '结束' }}
+                    {% endif %}
+                </span>
+            </button>
+            <div class="date-range-popover">
+                <input name="meeting_date_start" type="text" data-datepicker pattern="\d{4}-\d{2}-\d{2}" maxlength="10" value="{{ filters.raw.get('meeting_date_start', '') }}" aria-label="会议日期 从">
+                <span>至</span>
+                <input name="meeting_date_end" type="text" data-datepicker pattern="\d{4}-\d{2}-\d{2}" maxlength="10" value="{{ filters.raw.get('meeting_date_end', '') }}" aria-label="会议日期 到">
+            </div>
+        </div>
+        <select class="meeting-filter-control" name="location">
+            <option value="">全部会议地址</option>
+            {% for option in location_options %}
+            <option value="{{ option }}" {% if filters.raw.get('location', '') == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+        </select>
+        <select class="meeting-filter-control" name="hoster_name">
+            <option value="">全部主持人</option>
+            {% for name in hoster_options %}
+            <option value="{{ name }}" {% if filters.hoster_name == name %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+        </select>
+        <select class="meeting-filter-control" name="status">
+            <option value="">全部状态</option>
+            <option value="draft" {% if filters.raw.get('status', '') == 'draft' %}selected{% endif %}>草稿</option>
+            <option value="preparing" {% if filters.raw.get('status', '') == 'preparing' %}selected{% endif %}>准备中</option>
+            <option value="reporting" {% if filters.raw.get('status', '') == 'reporting' %}selected{% endif %}>汇报中</option>
+            <option value="completed" {% if filters.raw.get('status', '') == 'completed' %}selected{% endif %}>已完成</option>
+        </select>
+        <select class="meeting-filter-control" name="plan_version_id" data-plan-version-select>
+            <option value="">全部 Plan Version</option>
+            {% for option in plan_version_options %}
+            <option value="{{ option.id }}" {% if filters.plan_version_id == option.id %}selected{% endif %}>{{ option.name }}</option>
+            {% endfor %}
+        </select>
+        <select class="meeting-filter-control" name="plan_round_id" data-plan-round-select>
+            <option value="">全部 Round</option>
+            {% set selected_version_id = filters.plan_version_id or (plan_version_options[0].id if plan_version_options else none) %}
+            {% for option in round_options_for_version(selected_version_id) %}
+            <option value="{{ option.id }}" {% if filters.plan_round_id == option.id %}selected{% endif %}>{{ option.name }}</option>
+            {% endfor %}
+        </select>
+        <select class="meeting-filter-control" name="topic_category">
+            <option value="">全部类别</option>
+            {% for option in topic_category_options %}
+            <option value="{{ option }}" {% if filters.topic_category == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+        </select>
+        <select class="meeting-filter-control" name="readiness_status">
+            <option value="">全部会议准备度</option>
+            <option value="ready" {% if filters.raw.get('readiness_status', '') == 'ready' %}selected{% endif %}>已就绪</option>
+            <option value="mostly_ready" {% if filters.raw.get('readiness_status', '') == 'mostly_ready' %}selected{% endif %}>基本就绪</option>
+            <option value="preparing" {% if filters.raw.get('readiness_status', '') == 'preparing' %}selected{% endif %}>准备中</option>
+            <option value="risk" {% if filters.raw.get('readiness_status', '') == 'risk' %}selected{% endif %}>风险</option>
+            <option value="not_started" {% if filters.raw.get('readiness_status', '') == 'not_started' %}selected{% endif %}>未开始</option>
+        </select>
+        <div class="split-actions">
+            {% if filters.favorite %}
+            <a href="{{ url_for('meeting_list') }}" class="btn btn-outline meeting-favorite-filter active">{{ icons.icon('star') }} 我的收藏</a>
+            {% else %}
+            <a href="{{ url_for('meeting_list', favorite=1) }}" class="btn btn-outline meeting-favorite-filter">{{ icons.icon('star') }} 我的收藏</a>
+            {% endif %}
+            <button class="btn" type="submit">{{ icons.icon('search') }} 搜索</button>
+            <a href="{{ url_for('meeting_list') }}" class="btn btn-secondary">{{ icons.icon('redo') }} 重置</a>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-title">{{ icons.icon('table') }} 会议信息</div>
+    <div class="table-scroll meeting-table-wrap">
+        <table class="meeting-table">
+            <thead>
+                <tr>
+                    <th class="meeting-col-code">会议编号</th>
+                    <th class="meeting-col-title">会议标题</th>
+                    <th class="meeting-col-date">会议日期</th>
+                    <th class="meeting-col-location">会议地址</th>
+                    <th class="meeting-col-scope">Plan Version</th>
+                    <th class="meeting-col-round">Round</th>
+                    <th class="meeting-col-topic">议题</th>
+                    <th class="meeting-col-readiness">会议准备度</th>
+                    <th class="meeting-col-host">主持人</th>
+                    <th class="meeting-col-status">状态</th>
+                    <th class="meeting-col-updated">更新时间</th>
+                    <th class="meeting-col-actions">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for meeting in meetings %}
+                {% set readiness = meeting_readiness[meeting.id] %}
+                {% set is_favorite = meeting.id in favorite_meeting_ids %}
+                <tr>
+                    <td class="meeting-col-code">
+                        <a class="meeting-code-link" href="{{ url_for('meeting_detail', meeting_no=meeting.meeting_no) }}">{{ meeting.meeting_no }}</a>
+                    </td>
+                    <td class="meeting-col-title"><span class="table-cell-ellipsis">{{ meeting.title }}</span></td>
+                    <td class="meeting-col-date">{{ meeting.meeting_date.strftime('%Y-%m-%d') }}</td>
+                    <td class="meeting-col-location"><span class="table-cell-ellipsis">{{ meeting.location or '-' }}</span></td>
+                    <td class="meeting-col-scope">
+                        <span class="scope-chip">{{ meeting.plan_version_name }}</span>
+                    </td>
+                    <td class="meeting-col-round"><span class="scope-chip">{{ meeting.plan_round_name }}</span></td>
+                    <td class="meeting-col-topic">
+                        <div class="topic-mix-cell">
+                            <div class="topic-mix-total">
+                                {% if can_manage_meetings() %}共{% else %}我的{% endif %}
+                                <strong>{{ readiness.topic_count }}</strong> 个议题
+                            </div>
+                            {% if readiness.topic_count and can_manage_meetings() and (readiness.plan_count or readiness.decision_count) %}
+                            <div class="topic-mix-split">
+                                {% if readiness.plan_count %}Kick Off {{ readiness.plan_count }}{% endif %}
+                                {% if readiness.plan_count and readiness.decision_count %} · {% endif %}
+                                {% if readiness.decision_count %}POR Review {{ readiness.decision_count }}{% endif %}
+                                {% if readiness.st_meeting_count %}ST Meeting {{ readiness.st_meeting_count }}{% endif %}
+                            </div>
+                            {% endif %}
+                            {% if readiness.topic_count %}
+                            {% if readiness.review_missing %}
+                            <div class="topic-mix-review pending">{{ readiness.review_missing }} 个待 Review</div>
+                            {% else %}
+                            <div class="topic-mix-review done">全部已审</div>
+                            {% endif %}
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="meeting-col-readiness">
+                        <div class="readiness-cell">
+                            <div class="readiness-line">
+                                <strong>{{ readiness.score }}%</strong>
+                                <span class="badge readiness-{{ readiness.status_key }}">{{ readiness.status_label }}</span>
+                            </div>
+                            <div class="readiness-bar"><span style="width: {{ readiness.score }}%;"></span></div>
+                        </div>
+                    </td>
+                    <td class="meeting-col-host">{{ meeting.host or (meeting.host_user.display_name if meeting.host_user else '-') }}</td>
+                    <td class="meeting-col-status"><span class="badge {{ meeting.status }}">{{ meeting_status_labels[meeting.status] }}</span></td>
+                    <td class="meeting-col-updated">{{ format_local_datetime(meeting.updated_at) }}</td>
+                    <td class="meeting-col-actions">
+                        <div class="row-actions meeting-action-group">
+                            <form method="post" action="{{ url_for('meeting_favorite_toggle', meeting_no=meeting.meeting_no) }}">
+                                <input type="hidden" name="next" value="{{ request.full_path }}">
+                                <button class="icon-btn row-action-btn meeting-favorite-btn{% if is_favorite %} active{% endif %}" type="submit" title="{{ '取消收藏' if is_favorite else '收藏' }}" aria-label="{{ '取消收藏' if is_favorite else '收藏' }}" aria-pressed="{{ 'true' if is_favorite else 'false' }}">{{ icons.icon('star') }}</button>
+                            </form>
+                            <a class="icon-btn row-action-btn" href="{{ url_for('meeting_detail', meeting_no=meeting.meeting_no) }}" title="查看" aria-label="查看">{{ icons.icon('eye') }}</a>
+                            {% if can_manage_meetings() %}
+                            <a class="icon-btn row-action-btn" href="{{ url_for('meeting_edit', meeting_no=meeting.meeting_no) }}" title="更改" aria-label="更改">{{ icons.icon('save') }}</a>
+                            <form method="post" action="{{ url_for('meeting_delete', meeting_no=meeting.meeting_no) }}" onsubmit="return confirm('确认删除这场会议吗？相关议题、附件和会议纪要也会删除。');">
+                                <button class="icon-btn row-action-btn row-action-danger" type="submit" title="删除" aria-label="删除">{{ icons.icon('trash') }}</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="12" class="muted">暂无会议信息</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+window.AppShell.ready(function () {
+    function openPicker(input) {
+        if (!input) return;
+        input.focus();
+        if (window.AppDatepicker) window.AppDatepicker.open(input);
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll(".date-range-picker"), function (picker) {
+        var trigger = picker.querySelector(".date-range-trigger");
+        var popover = picker.querySelector(".date-range-popover");
+        var inputs = picker.querySelectorAll("input[data-datepicker]");
+        var value = picker.querySelector(".date-range-value");
+        if (!trigger || !popover || inputs.length < 2) return;
+
+        function syncLabel() {
+            var start = inputs[0].value;
+            var end = inputs[1].value;
+            var hasValue = !!(start || end);
+            value.textContent = hasValue ? (start || "开始") + " 至 " + (end || "结束") : value.getAttribute("data-empty");
+            picker.classList.toggle("has-value", hasValue);
+        }
+        syncLabel();
+
+        trigger.addEventListener("click", function (event) {
+            event.stopPropagation();
+            picker.classList.toggle("open");
+            if (picker.classList.contains("open")) {
+                openPicker(inputs[0]);
+            }
+        });
+        inputs[0].addEventListener("change", function () {
+            syncLabel();
+            openPicker(inputs[1]);
+        });
+        inputs[1].addEventListener("change", syncLabel);
+        popover.addEventListener("click", function (event) {
+            event.stopPropagation();
+        });
+    });
+
+    if (!window.MeetingDateRangeCloseBound) {
+        window.MeetingDateRangeCloseBound = true;
+        document.addEventListener("click", function () {
+            Array.prototype.forEach.call(document.querySelectorAll(".date-range-picker.open"), function (picker) {
+                picker.classList.remove("open");
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

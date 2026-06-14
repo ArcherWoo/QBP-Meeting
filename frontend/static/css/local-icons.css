@@ -1,0 +1,120 @@
+/* Local SVG icons: offline, consistent, and aligned with the existing blue UI. */
+.svg-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    color: currentColor;
+    vertical-align: -2px;
+}
+
+.svg-icon svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.15;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.svg-icon circle,
+.svg-icon rect,
+.svg-icon path {
+    vector-effect: non-scaling-stroke;
+}
+
+.icon-title {
+    width: 22px;
+    height: 22px;
+    margin-right: 10px;
+    vertical-align: -3px;
+}
+
+.icon-brand {
+    width: 20px;
+    height: 20px;
+    margin-right: 10px;
+}
+
+.icon-small {
+    width: 14px;
+    height: 14px;
+}
+
+.icon-copilot {
+    width: 18px;
+    height: 18px;
+    margin-right: 0;
+}
+
+.icon-status-dot {
+    width: 8px;
+    height: 8px;
+    margin-right: 5px;
+}
+
+.icon-status-dot svg {
+    fill: currentColor;
+    stroke: none;
+}
+
+.icon-empty,
+.icon-login {
+    margin-right: 0;
+}
+
+.icon-empty {
+    width: 21px;
+    height: 21px;
+}
+
+.icon-login {
+    width: 40px;
+    height: 40px;
+}
+
+.brand .svg-icon,
+.sidebar .svg-icon,
+.user-info .svg-icon,
+.btn .svg-icon,
+.card-title .svg-icon,
+.page-header h1 .svg-icon {
+    position: relative;
+    top: 0;
+}
+
+.icon-btn .svg-icon,
+.topic-delete-icon .svg-icon,
+.ai-copilot-launcher-mark .svg-icon,
+.ai-copilot-mark .svg-icon,
+.ai-copilot-empty .svg-icon,
+.ai-context-chip .svg-icon {
+    margin-right: 0;
+}
+
+.icon-btn .svg-icon {
+    width: 15px;
+    height: 15px;
+}
+
+.topic-delete-icon .svg-icon {
+    width: 13px;
+    height: 13px;
+}
+
+.sidebar .svg-icon {
+    width: 17px;
+    height: 17px;
+    margin-right: 10px;
+}
+
+.user-info .svg-icon {
+    width: 15px;
+    height: 15px;
+    margin-right: 6px;
+}

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% import "macros/icons.html" as icons %}
+{% block title %}管理首页 - QBP Meeting MGMT{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ icons.icon('dashboard', 'icon-title') }} 管理首页</h1>
+        <p class="muted">会议、议题、审批和用户权限概览</p>
+    </div>
+    <div class="split-actions">
+        <a class="btn" href="{{ url_for('admin_topic_approvals') }}">{{ icons.icon('shield') }} 去审批</a>
+        <a class="btn btn-outline" href="{{ url_for('admin_users') }}">{{ icons.icon('shield') }} 权限管理</a>
+        <a class="btn btn-outline" href="{{ url_for('admin_activity') }}">{{ icons.icon('dashboard') }} 活跃统计</a>
+    </div>
+</div>
+<div class="grid grid-2">
+    <div class="card"><div class="card-title">会议数量</div><h1>{{ meeting_count }}</h1></div>
+    <div class="card"><div class="card-title">议题数量</div><h1>{{ topic_count }}</h1></div>
+    <a class="card metric-link-card" href="{{ url_for('admin_topic_approvals') }}">
+        <div class="card-title">待审批议题</div>
+        <h1>{{ pending_count }}</h1>
+        <span class="muted">点击进入审批列表</span>
+    </a>
+    <div class="card"><div class="card-title">用户数量</div><h1>{{ user_count }}</h1></div>
+    <a class="card metric-link-card" href="{{ url_for('admin_activity') }}">
+        <div class="card-title">今日活跃</div>
+        <h1 data-testid="admin-dau">{{ activity.dau }}</h1>
+        <span class="muted">本月活跃 {{ activity.mau }}</span>
+    </a>
+    <a class="card metric-link-card" href="{{ url_for('admin_audit_logs') }}">
+        <div class="card-title">今日操作数</div>
+        <h1>{{ activity.today_operations }}</h1>
+        <span class="muted">查看完整操作记录</span>
+    </a>
+</div>
+
+<div class="card admin-recent-card">
+    <div class="card-title-action">
+        <div class="card-title">{{ icons.icon('table') }} 最近操作</div>
+        <a class="btn btn-outline btn-sm" href="{{ url_for('admin_audit_logs') }}">全部记录</a>
+    </div>
+    <table class="admin-recent-table">
+        <thead>
+            <tr>
+                <th>时间</th>
+                <th>用户</th>
+                <th>操作</th>
+                <th>对象</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in recent_logs %}
+            <tr>
+                <td>{{ format_local_datetime(log.created_at) }}</td>
+                <td><span class="admin-recent-user" title="{{ log.display_name_snapshot or log.username_snapshot or '-' }}">{{ log.display_name_snapshot or log.username_snapshot or '-' }}</span></td>
+                <td><span class="admin-recent-action" title="{{ action_labels.get(log.action, log.action) }}">{{ action_labels.get(log.action, log.action) }}</span></td>
+                <td><span class="admin-recent-target" title="{{ log.target_label or '-' }}">{{ log.target_label or '-' }}</span></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="muted admin-recent-empty">暂无操作记录</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

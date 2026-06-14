@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+{% import "macros/icons.html" as icons %}
+{% set is_new = topic is none %}
+{% set editable = is_new or current_user.role == 'admin' or (topic.created_by == current_user.id and topic.workflow_status in ['draft', 'rejected', 'withdrawn']) %}
+{% set target_meeting = topic.requested_meeting if topic and topic.requested_meeting else topic.meeting if topic and topic.meeting else none %}
+{% if topic %}
+{% set readiness = topic_completeness(topic) %}
+{% set readiness_class = 'ready' if readiness.score >= 70 else 'preparing' if readiness.score >= 40 else 'risk' %}
+{% endif %}
+{% block title %}{{ '新建议题' if is_new else topic.title }} - QBP Meeting MGMT{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ icons.icon('drafts', 'icon-title') }} {{ '新建议题' if is_new else topic.title }}</h1>
+        <p class="muted">
+            {% if is_new %}
+            先创建议题，可选择同步上传一份材料。
+            {% else %}
+            <span class="badge {{ topic.workflow_status }}">{{ workflow_status_labels[topic.workflow_status] }}</span>
+            {% if target_meeting %}
+            <span class="draft-header-meta">目标会议 {{ target_meeting.meeting_no }} | {{ target_meeting.title }}</span>
+            {% else %}
+            <span class="draft-header-meta">暂未选择目标会议</span>
+            {% endif %}
+            {% endif %}
+        </p>
+    </div>
+    <a href="{{ url_for('topic_drafts') }}" class="btn btn-secondary">{{ icons.icon('back') }} 返回议题池</a>
+</div>
+
+{% if topic and topic.review_comment %}
+<div class="alert alert-info">审批意见：{{ topic.review_comment }}</div>
+{% endif %}
+
+<div class="card draft-topic-card">
+    <div class="draft-topic-workspace">
+        <div class="draft-topic-main">
+        <form
+            id="topic-editor-form"
+            method="post"
+            enctype="multipart/form-data"
+            action="{{ url_for('topic_draft_create') if is_new else url_for('topic_draft_edit', topic_id=topic.id) }}">
+            <div class="card-title">{{ icons.icon('info') }} 议题信息</div>
+            <div class="grid grid-3">
+                <div class="form-group">
+                    <label>议题标题</label>
+                    <input name="title" value="{{ topic.title if topic else '' }}" {% if not editable %}readonly{% endif %} required>
+                </div>
+                <div class="form-group">
+                    <label>类别</label>
+                    <select name="category" {% if not editable %}disabled{% endif %}>
+                        {% for option in topic_category_options %}
+                        <option value="{{ option }}" {% if topic and topic.category == option %}selected{% endif %}>{{ option }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Plan Version</label>
+                    <select name="plan_version_id" data-plan-version-select {% if not editable %}disabled{% endif %}>
+                        {% for option in plan_version_options %}
+                        <option value="{{ option.id }}" {% if (topic and topic.plan_version_id == option.id) or (is_new and loop.first) %}selected{% endif %}>{{ option.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Round</label>
+                    <select name="plan_round_id" data-plan-round-select {% if not editable %}disabled{% endif %}>
+                        {% set selected_version_id = topic.plan_version_id if topic else (plan_version_options[0].id if plan_version_options else none) %}
+                        {% for option in round_options_for_version(selected_version_id) %}
+                        <option value="{{ option.id }}" {% if (topic and topic.plan_round_id == option.id) or (is_new and loop.first) %}selected{% endif %}>{{ option.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>汇报人</label>
+                    <input name="owner" value="{{ topic.owner if topic else current_user.display_name }}" {% if not editable %}readonly{% endif %}>
+                </div>
+                <div class="form-group">
+                    <label>汇报时长</label>
+                    <div class="duration-stepper duration-stepper-integrated" data-duration-stepper>
+                        <button type="button" class="duration-stepper-button" data-duration-step="-5" aria-label="减少 5 分钟" {% if not editable %}disabled{% endif %}>-</button>
+                        <input name="duration_minutes" type="text" inputmode="numeric" pattern="[0-9]*" value="{{ topic.duration_minutes if topic else topic_duration_default_minutes }}" data-duration-input aria-label="汇报时长分钟数" {% if not editable %}readonly{% endif %}>
+                        <button type="button" class="duration-stepper-button" data-duration-step="5" aria-label="增加 5 分钟" {% if not editable %}disabled{% endif %}>+</button>
+                        <span class="duration-stepper-unit">分钟</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>申请加入会议</label>
+                    <select name="requested_meeting_id" {% if not editable %}disabled{% endif %}>
+                        <option value="">暂不选择</option>
+                        {% for meeting in meetings %}
+                        <option value="{{ meeting.id }}" {% if topic and topic.requested_meeting_id == meeting.id %}selected{% endif %}>{{ meeting.meeting_no }} | {{ meeting.title }} | {{ meeting.plan_version_name }} | {{ meeting.plan_round_name }} | {{ meeting.category }} | {{ meeting.meeting_date.strftime('%Y-%m-%d') }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% if topic %}
+                <div class="form-group">
+                    <label>流程状态</label>
+                    <input value="{{ workflow_status_labels[topic.workflow_status] }}" readonly>
+                </div>
+                {% endif %}
+            </div>
+            <div class="grid grid-2">
+                <div class="form-group">
+                    <label>背景</label>
+                    <textarea name="background" {% if not editable %}readonly{% endif %}>{{ topic.background if topic else '' }}</textarea>
+                </div>
+                <div class="form-group">
+                    <label>目的</label>
+                    <textarea name="purpose" {% if not editable %}readonly{% endif %}>{{ topic.purpose if topic else '' }}</textarea>
+                </div>
+            </div>
+        </form>
+
+        <section class="draft-main-section">
+            <div class="draft-side-heading">
+                <strong>{{ icons.icon('paperclip') }} 议题附件</strong>
+                {% if topic %}<span class="muted">{{ topic.attachments.count() }} 个</span>{% endif %}
+            </div>
+            {% if is_new %}
+            <div class="form-group">
+                <label>可选上传材料</label>
+                <div class="draft-create-upload-row">
+                    <input id="draft-initial-file" class="visually-hidden-file" form="topic-editor-form" type="file" name="file">
+                    <label class="file-upload-shell" for="draft-initial-file">
+                        <span class="file-upload-button">{{ icons.icon('upload') }} 上传</span>
+                        <span class="file-upload-name" data-empty="未选择任何文件">未选择任何文件</span>
+                    </label>
+                </div>
+            </div>
+            <p class="muted draft-meta-line">不上传也可以创建议题；支持 PPT、Word、PDF、Excel、PNG、JPG。</p>
+            {% elif editable %}
+            <form method="post" action="{{ url_for('attachment_upload', topic_id=topic.id) }}" enctype="multipart/form-data" class="draft-upload-form">
+                <input id="draft-attachment-file" class="visually-hidden-file" type="file" name="file" required data-auto-submit>
+                <label class="file-upload-shell" for="draft-attachment-file">
+                    <span class="file-upload-button">{{ icons.icon('upload') }} 上传</span>
+                    <span class="file-upload-name" data-empty="未选择任何文件">未选择任何文件</span>
+                </label>
+            </form>
+            {% endif %}
+
+            {% if topic %}
+            <div class="attachment-list">
+                {% for attachment in topic.attachments %}
+                <div class="attachment-row draft-attachment-row">
+                    <div>
+                        <strong>{{ attachment.original_filename }}</strong>
+                        <div class="muted">{{ attachment.effective_file_type|upper or 'FILE' }} | {{ (attachment.file_size / 1024)|round(1) }} KB</div>
+                        <div class="muted">材料索引：{{ attachment.material_document.status_label if attachment.material_document else '未进入材料知识库' }}{% if attachment.material_document and attachment.material_document.error_message %} | {{ attachment.material_document.error_message }}{% endif %}</div>
+                    </div>
+                    <div class="split-actions">
+                        {% if attachment.can_preview_inline %}
+                        <a class="btn btn-outline btn-sm" href="{{ url_for('attachment_preview', attachment_id=attachment.id) }}" target="_blank">{{ icons.icon('eye') }} 预览</a>
+                        {% endif %}
+                        <a class="btn btn-sm" href="{{ url_for('attachment_download', attachment_id=attachment.id) }}">{{ icons.icon('download') }} 下载</a>
+                        {% if editable %}
+                        <form method="post" action="{{ url_for('attachment_delete', attachment_id=attachment.id) }}" onsubmit="return confirm('确认删除该附件？');">
+                            <button class="btn btn-secondary btn-sm" type="submit">{{ icons.icon('trash') }} 删除</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="draft-empty-state">还没有上传附件。</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </section>
+        </div>
+
+        <aside class="draft-topic-side">
+            <section class="draft-action-panel">
+                <div class="draft-side-heading">
+                    <strong>{{ icons.icon('shield') }} 流程状态</strong>
+                    {% if topic %}
+                    <span class="badge {{ topic.workflow_status }}">{{ workflow_status_labels[topic.workflow_status] }}</span>
+                    {% else %}
+                    <span class="badge draft">新建</span>
+                    {% endif %}
+                </div>
+                {% if is_new %}
+                <p class="muted draft-meta-line">创建议题后可继续上传附件、授权查看并提交审批。</p>
+                <button class="btn btn-success" type="submit" form="topic-editor-form">{{ icons.icon('plus') }} 创建议题</button>
+                {% elif topic %}
+                <div class="draft-completeness-summary">
+                    <div class="readiness-line">
+                        <span class="agenda-readiness {{ readiness_class }}">完善度 {{ readiness.score }}</span>
+                    </div>
+                    <div class="readiness-bar"><span style="width: {{ readiness.score }}%;"></span></div>
+                    <p class="muted draft-meta-line">待补充：{{ readiness.missing|join('、') if readiness.missing else '无' }}</p>
+                </div>
+                {% endif %}
+                {% if is_new %}
+                {% elif editable %}
+                <p class="muted draft-meta-line">保存草稿可继续补充材料；提交审批会先保存当前信息。</p>
+                <div class="draft-action-buttons">
+                    <button class="btn btn-success" type="submit" form="topic-editor-form" name="draft_action" value="save">{{ icons.icon('save') }} 保存草稿</button>
+                    {% if topic.workflow_status in ['draft', 'rejected', 'withdrawn'] and topic.created_by == current_user.id %}
+                    <button class="btn" type="submit" form="topic-editor-form" name="draft_action" value="submit">{{ icons.icon('send') }} 提交审批</button>
+                    {% endif %}
+                    {% if topic.workflow_status == 'approved' and topic.meeting %}
+                    <a class="btn btn-outline" href="{{ url_for('meeting_detail', meeting_no=topic.meeting.meeting_no, topic_id=topic.id) }}">{{ icons.icon('meeting') }} 查看会议</a>
+                    {% endif %}
+                </div>
+                {% elif topic.workflow_status == 'submitted' and topic.created_by == current_user.id %}
+                <p class="muted draft-meta-line">议题已提交审批，审批前可撤回修改。</p>
+                <form method="post" action="{{ url_for('topic_draft_withdraw', topic_id=topic.id) }}">
+                    <button class="btn btn-secondary" type="submit">{{ icons.icon('back') }} 撤回申请</button>
+                </form>
+                {% elif topic.workflow_status == 'approved' and topic.meeting %}
+                <p class="muted draft-meta-line">议题已进入会议。</p>
+                <a class="btn btn-outline" href="{{ url_for('meeting_detail', meeting_no=topic.meeting.meeting_no, topic_id=topic.id) }}">{{ icons.icon('meeting') }} 查看会议</a>
+                {% else %}
+                <p class="muted draft-meta-line">当前状态仅可查看。</p>
+                {% endif %}
+            </section>
+
+            <section class="draft-side-section">
+                <div class="draft-side-heading">
+                    <strong>{{ icons.icon('shield') }} 授权查看</strong>
+                    {% if topic %}<span class="muted">{{ topic.shares.count() }} 人</span>{% endif %}
+                </div>
+                {% if is_new %}
+                <div class="draft-empty-state">创建议题后可授权其他用户查看。</div>
+                {% elif can_share|default(false) %}
+                <p class="muted draft-meta-line">默认仅创建人和系统管理员可见。</p>
+                <form method="post" action="{{ url_for('topic_share', topic_id=topic.id) }}" class="draft-share-form">
+                    <select name="user_id" required>
+                        <option value="">选择用户</option>
+                        {% for u in shareable_users %}
+                        <option value="{{ u.id }}">{{ u.display_name }} ({{ u.username }})</option>
+                        {% endfor %}
+                    </select>
+                    <button class="btn btn-sm" type="submit">{{ icons.icon('plus') }} 授权</button>
+                </form>
+                <div class="attachment-list">
+                    {% for share in topic.shares %}
+                    <div class="attachment-row draft-attachment-row">
+                        <div>
+                            <strong>{{ share.user.display_name if share.user else '-' }}</strong>
+                            <div class="muted">{{ share.user.username if share.user else '' }} | 授权时间 {{ format_local_datetime(share.created_at) }}</div>
+                        </div>
+                        <form method="post" action="{{ url_for('topic_share_revoke', topic_id=topic.id, user_id=share.user_id) }}" onsubmit="return confirm('确认撤销该用户的查看权限？');">
+                            <button class="btn btn-secondary btn-sm" type="submit">{{ icons.icon('trash') }} 撤销</button>
+                        </form>
+                    </div>
+                    {% else %}
+                    <div class="draft-empty-state">尚未授权任何用户。</div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="draft-empty-state">你拥有查看权限。</div>
+                {% endif %}
+            </section>
+        </aside>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+window.AppShell.ready(function () {
+    Array.prototype.forEach.call(document.querySelectorAll(".visually-hidden-file"), function (input) {
+        var shell = document.querySelector('label[for="' + input.id + '"]');
+        var name = shell ? shell.querySelector(".file-upload-name") : null;
+        input.addEventListener("change", function () {
+            if (name) {
+                name.textContent = input.files && input.files.length ? input.files[0].name : name.getAttribute("data-empty");
+            }
+            if (input.hasAttribute("data-auto-submit") && input.files && input.files.length) {
+                input.form.submit();
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

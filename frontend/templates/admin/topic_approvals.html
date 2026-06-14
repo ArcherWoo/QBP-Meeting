@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% import "macros/icons.html" as icons %}
+{% block title %}议题审批 - QBP Meeting MGMT{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ icons.icon('shield', 'icon-title') }} 议题审批</h1>
+        <p class="muted">集中处理普通用户提交到会议的议题申请。</p>
+    </div>
+    <a class="btn btn-secondary" href="{{ url_for('admin_index') }}">{{ icons.icon('back') }} 返回管理首页</a>
+</div>
+
+<div class="card">
+    <div class="card-title">{{ icons.icon('table') }} 待审批议题</div>
+    <div class="approval-list">
+        {% for topic in topics %}
+        <div class="approval-row">
+            <div>
+                <strong>{{ topic.title }}</strong>
+                <div class="muted">
+                    {{ topic.category or '-' }} |
+                    {{ topic.owner or topic.creator.display_name if topic.creator else '-' }} |
+                    目标会议：{{ topic.requested_meeting.meeting_no if topic.requested_meeting else '-' }}
+                    {{ topic.requested_meeting.title if topic.requested_meeting else '' }}
+                </div>
+                {% if topic.background %}<p>{{ topic.background }}</p>{% endif %}
+                {% if topic.purpose %}<p class="muted">目的：{{ topic.purpose }}</p>{% endif %}
+            </div>
+            <div class="approval-actions">
+                <a class="btn btn-outline btn-sm" href="{{ url_for('meeting_detail', meeting_no=topic.requested_meeting.meeting_no, topic_id=topic.id) if topic.requested_meeting else '#' }}">{{ icons.icon('meeting') }} 查看会议</a>
+                <form method="post" action="{{ url_for('topic_approve', topic_id=topic.id) }}">
+                    <button class="btn btn-success btn-sm" type="submit">{{ icons.icon('save') }} 通过</button>
+                </form>
+                <form method="post" action="{{ url_for('topic_reject', topic_id=topic.id) }}" class="approval-reject-form">
+                    <input name="review_comment" placeholder="驳回原因">
+                    <button class="btn btn-secondary btn-sm" type="submit">{{ icons.icon('close') }} 驳回</button>
+                </form>
+            </div>
+        </div>
+        {% else %}
+        <p class="muted">暂无待审批议题。</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

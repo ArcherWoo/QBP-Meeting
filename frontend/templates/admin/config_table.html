@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% import "macros/icons.html" as icons %}
+{% block title %}配置表 - QBP Meeting MGMT{% endblock %}
+{% block content %}
+{% set readiness_weights = readiness_config.weights %}
+{% set readiness_thresholds = readiness_config.thresholds %}
+{% set rule = completeness_config.rules[selected_scope] %}
+{% set topic_weights = rule.weights %}
+{% set topic_thresholds = rule.thresholds %}
+<div class="page-header">
+    <div>
+        <h1>{{ icons.icon('settings', 'icon-title') }} 配置表</h1>
+        <p class="muted">集中配置会议准备度和议题完善度评分规则，保存后立即影响列表、详情页和议题看板。</p>
+    </div>
+    <a class="btn btn-secondary" href="{{ url_for('admin_index') }}">{{ icons.icon('back') }} 返回管理首页</a>
+</div>
+
+<section class="config-block">
+    <div class="config-block-head">
+        <h2>会议准备度配置</h2>
+        <p class="muted">用于会议列表的整体准备度判断。</p>
+    </div>
+    <form method="post" action="{{ url_for('admin_readiness_config') }}" class="config-layout">
+        <section class="card config-card">
+            <div class="card-title">{{ icons.icon('table') }} 评分构成</div>
+            <p class="muted config-help">两项权重合计必须等于 100。会议准备度按会议基础信息和平均议题完善度汇总计算；平均议题完善度是所有已审批议题完善度的普通平均值。</p>
+            <div class="config-grid readiness-weight-grid">
+                <label class="config-field">
+                    <span>会议基础信息</span>
+                    <input name="meeting_info_weight" value="{{ readiness_weights.meeting_info }}" type="number" min="0" max="100" required>
+                </label>
+                <label class="config-field">
+                    <span>平均议题完善度</span>
+                    <input name="topic_completeness_weight" value="{{ readiness_weights.topic_completeness }}" type="number" min="0" max="100" required>
+                </label>
+            </div>
+            <div class="config-total">
+                <span>当前合计</span>
+                <strong data-testid="weight-total">{{ readiness_weights.meeting_info + readiness_weights.topic_completeness }}</strong>
+            </div>
+        </section>
+
+        <section class="card config-card">
+            <div class="card-title">{{ icons.icon('dashboard') }} 分档阈值</div>
+            <p class="muted config-help">阈值必须满足：已就绪 > 基本就绪 > 准备中。</p>
+            <div class="config-grid">
+                <label class="config-field">
+                    <span>已就绪</span>
+                    <input name="ready_threshold" value="{{ readiness_thresholds.ready }}" type="number" min="0" max="100" required>
+                </label>
+                <label class="config-field">
+                    <span>基本就绪</span>
+                    <input name="mostly_ready_threshold" value="{{ readiness_thresholds.mostly_ready }}" type="number" min="0" max="100" required>
+                </label>
+                <label class="config-field">
+                    <span>准备中</span>
+                    <input name="preparing_threshold" value="{{ readiness_thresholds.preparing }}" type="number" min="0" max="100" required>
+                </label>
+            </div>
+            <div class="config-preview">
+                <span class="badge readiness-ready">≥ {{ readiness_thresholds.ready }} 已就绪</span>
+                <span class="badge readiness-mostly_ready">≥ {{ readiness_thresholds.mostly_ready }} 基本就绪</span>
+                <span class="badge readiness-preparing">≥ {{ readiness_thresholds.preparing }} 准备中</span>
+                <span class="badge readiness-risk">低于 {{ readiness_thresholds.preparing }} 风险</span>
+            </div>
+        </section>
+
+        <div class="config-actions">
+            <button class="btn btn-success" type="submit">{{ icons.icon('save') }} 保存会议准备度配置</button>
+        </div>
+    </form>
+</section>
+
+<div class="config-page-divider" role="separator" aria-label="配置分隔线"></div>
+
+<section class="config-block">
+    <div class="config-block-head">
+        <h2>议题完善度评分规则</h2>
+        <p class="muted">按 Plan Version 分别配置议题完善度。先选择一个 Plan Version，只编辑当前版本的规则。</p>
+    </div>
+
+    <section class="card config-card topic-completeness-selector">
+        <div class="card-title">{{ icons.icon('search') }} Plan Version</div>
+        <form method="get" action="{{ url_for('admin_config') }}" class="inline-form">
+            <label class="config-field">
+                <span>选择 Plan Version</span>
+                <select name="scope" onchange="this.form.submit()">
+                    {% for scope in plan_version_options %}
+                    <option value="{{ scope.name }}" {% if selected_scope == scope.name %}selected{% endif %}>{{ scope.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </form>
+    </section>
+
+    <form method="post" action="{{ url_for('admin_topic_completeness_config') }}" class="config-layout">
+        <input type="hidden" name="scope" value="{{ selected_scope }}">
+        <section class="card config-card">
+            <div class="card-title card-title-action">
+                <span>{{ icons.icon('table') }} {{ selected_scope }} 完善度评分规则</span>
+                <span class="scope-chip">{{ selected_scope }}</span>
+            </div>
+            <p class="muted config-help">四项权重合计必须等于 100；保存后影响该 Plan Version 议题在议题池、详情页和议题看板中的完善度。</p>
+            <div class="config-section-title">评分构成</div>
+            <div class="config-grid">
+                <label class="config-field">
+                    <span>基础信息</span>
+                    <input name="basic_info_weight" value="{{ topic_weights.basic_info }}" type="number" min="0" max="100" required>
+                </label>
+                <label class="config-field">
+                    <span>背景/目的</span>
+                    <input name="background_purpose_weight" value="{{ topic_weights.background_purpose }}" type="number" min="0" max="100" required>
+                </label>
+                <label class="config-field">
+                    <span>附件</span>
+                    <input name="attachment_weight" value="{{ topic_weights.attachment }}" type="number" min="0" max="100" required>
+                </label>
+                <label class="config-field">
+                    <span>材料 Review</span>
+                    <input name="review_weight" value="{{ topic_weights.review }}" type="number" min="0" max="100" required>
+                </label>
+            </div>
+            <div class="config-total">
+                <span>当前合计</span>
+                <strong data-testid="topic-weight-total">{{ topic_weights.basic_info + topic_weights.background_purpose + topic_weights.attachment + topic_weights.review }}</strong>
+            </div>
+        </section>
+
+        <section class="card config-card">
+            <div class="card-title">{{ icons.icon('dashboard') }} {{ selected_scope }} 分档阈值</div>
+            <p class="muted config-help">阈值必须满足：已就绪 > 基本就绪 > 准备中。</p>
+            <div class="config-grid">
+                <label class="config-field">
+                    <span>已就绪</span>
+                    <input name="ready_threshold" value="{{ topic_thresholds.ready }}" type="number" min="0" max="100" required>
+                </label>
+                <label class="config-field">
+                    <span>基本就绪</span>
+                    <input name="mostly_ready_threshold" value="{{ topic_thresholds.mostly_ready }}" type="number" min="0" max="100" required>
+                </label>
+                <label class="config-field">
+                    <span>准备中</span>
+                    <input name="preparing_threshold" value="{{ topic_thresholds.preparing }}" type="number" min="0" max="100" required>
+                </label>
+            </div>
+            <div class="config-preview">
+                <span class="badge readiness-ready">≥ {{ topic_thresholds.ready }} 已就绪</span>
+                <span class="badge readiness-mostly_ready">≥ {{ topic_thresholds.mostly_ready }} 基本就绪</span>
+                <span class="badge readiness-preparing">≥ {{ topic_thresholds.preparing }} 准备中</span>
+                <span class="badge readiness-risk">低于 {{ topic_thresholds.preparing }} 风险</span>
+            </div>
+        </section>
+
+        <div class="config-actions">
+            <button class="btn btn-success" type="submit">{{ icons.icon('save') }} 保存 {{ selected_scope }} 配置</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

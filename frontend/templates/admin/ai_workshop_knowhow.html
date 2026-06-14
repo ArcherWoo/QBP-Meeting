@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% import "macros/icons.html" as icons %}
+{% block title %}AI 知识沉淀 - QBP Meeting MGMT{% endblock %}
+{% block content %}
+<div class="page-header aiw-page-header">
+    <div>
+        <h1>{{ icons.icon('magic', 'icon-title') }} AI 知识沉淀</h1>
+        <p class="muted">沉淀可复用的 QBP 判断口径，AI Review 会自动引用通用经验和当前业务组的已启用知识。</p>
+    </div>
+    {% if can_manage_ai_prompt() %}
+    <div class="page-header-actions">
+        <a class="btn btn-secondary" href="{{ url_for('ai_workshop_prompt') }}">{{ icons.icon('drafts') }} 提示词管理</a>
+    </div>
+    {% endif %}
+</div>
+
+<section class="card aiw-knowledge-workspace">
+    <div class="aiw-workspace-bar">
+        <div class="aiw-space-switch">
+            <span class="aiw-space-mark">{{ icons.icon('layers') }}</span>
+            <form method="get" action="{{ url_for('ai_workshop_knowhow') }}" class="aiw-scope-select-form">
+                <select class="meeting-filter-control aiw-scope-select" name="scope" onchange="this.form.submit()">
+                    {% for s in scopes %}
+                    <option value="{{ s }}" {% if s == scope %}selected{% endif %}>
+                        {% if s == 'GLOBAL' %}通用领域知识{% else %}{{ scope_label(s) }} 领域知识{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+
+        <div class="aiw-filter-rail">
+            <a class="aiw-filter-pill{% if selected_category_id is none %} active{% endif %}" href="{{ url_for('ai_workshop_knowhow', scope=scope) }}">
+                全部
+            </a>
+            {% for category in categories %}
+            <span class="aiw-filter-pill-wrap">
+                <a class="aiw-filter-pill{% if selected_category_id == category.id %} active{% endif %}" href="{{ url_for('ai_workshop_knowhow', scope=scope, category_id=category.id) }}">
+                    {{ category.name }}
+                </a>
+                {% if can_manage_categories %}
+                <form method="post" action="{{ url_for('ai_workshop_knowhow_category_delete', category_id=category.id) }}" onsubmit="return confirm('确认删除这个分类？原知识会移至未分类。');">
+                    <button type="submit" title="删除 {{ category.name }}" aria-label="删除 {{ category.name }}">{{ icons.icon('trash') }}</button>
+                </form>
+                {% endif %}
+            </span>
+            {% endfor %}
+            {% if uncategorized_count %}
+            <a class="aiw-filter-pill muted-pill{% if selected_category_id == 0 %} active{% endif %}" href="{{ url_for('ai_workshop_knowhow', scope=scope, category_id=0) }}">
+                未分类
+            </a>
+            {% endif %}
+            {% if can_manage_categories %}
+            <form method="post" action="{{ url_for('ai_workshop_knowhow_category_create') }}" class="aiw-inline-category-form">
+                <input type="hidden" name="scope" value="{{ scope }}">
+                <input type="text" name="name" maxlength="120" placeholder="+ 新分类" required>
+                <button type="submit">{{ icons.icon('plus') }}</button>
+            </form>
+            {% endif %}
+        </div>
+
+        <div class="aiw-workspace-meta">
+            <span>{{ counts[scope] }} 条知识</span>
+            <span>{{ categories|length }} 个分类</span>
+            {% if can_edit %}
+            <span>{{ '可维护' if can_manage_categories else '可编辑' }}</span>
+            {% else %}
+            <span>只读模式</span>
+            {% endif %}
+        </div>
+        <div class="aiw-csv-actions">
+            {% if can_edit %}
+            <form method="post" action="{{ url_for('ai_workshop_knowhow_import') }}" enctype="multipart/form-data" class="aiw-csv-import-form">
+                <input type="hidden" name="scope" value="{{ scope }}">
+                <input id="knowhow-csv-import" class="visually-hidden-file" type="file" name="file" accept=".csv,text/csv" required data-auto-submit>
+                <label class="btn btn-outline btn-sm aiw-csv-button aiw-icon-only-csv" for="knowhow-csv-import" title="导入 CSV" aria-label="导入 CSV">{{ icons.icon('upload') }}</label>
+            </form>
+            {% endif %}
+            <a class="btn btn-secondary btn-sm aiw-csv-button aiw-icon-only-csv" href="{% if selected_category_id is not none %}{{ url_for('ai_workshop_knowhow_export', scope=scope, category_id=selected_category_id) }}{% else %}{{ url_for('ai_workshop_knowhow_export', scope=scope) }}{% endif %}" title="导出 CSV" aria-label="导出 CSV">{{ icons.icon('download') }}</a>
+        </div>
+    </div>
+</section>
+
+<section class="card aiw-library-card">
+    <div class="card-title">
+        <span>{{ icons.icon('table') }} 记录新知识</span>
+    </div>
+
+    {% if can_edit %}
+    <form method="post" action="{{ url_for('ai_workshop_knowhow_create') }}" class="aiw-composer-shell">
+        <input type="hidden" name="scope" value="{{ scope }}">
+        <textarea name="content" rows="3" required placeholder="写下一条可被 AI Review 复用的判断口径，例如：{% if scope == 'GLOBAL' %}所有BP材料必须说明数据来源、口径、gap和风险兜底{% else %}{{ scope }} 需写清指标变化、BP gap、行动计划和owner{% endif %}"></textarea>
+        <div class="aiw-composer-bar">
+            <span class="aiw-composer-hint">保存后会进入当前方向的 AI Review 引用池</span>
+            <div class="aiw-composer-actions">
+                <select class="meeting-filter-control" name="category_id" required {% if not categories %}disabled{% endif %}>
+                    <option value="">{% if categories %}选择归属{% else %}请先新建分类{% endif %}</option>
+                    {% for category in categories %}
+                    <option value="{{ category.id }}" {% if selected_category_id == category.id %}selected{% endif %}>{{ category.name }}</option>
+                    {% endfor %}
+                </select>
+                <label class="aiw-switch">
+                    <input type="checkbox" name="is_active" value="1" checked>
+                    <span></span>
+                    启用
+                </label>
+                <button class="btn btn-success btn-sm" type="submit" {% if not categories %}disabled{% endif %}>{{ icons.icon('plus') }} 添加</button>
+            </div>
+        </div>
+    </form>
+    {% endif %}
+
+    <div class="aiw-pool-divider">
+        <span class="aiw-pool-title">{{ icons.icon('layers') }} 知识沉淀池</span>
+        <span class="aiw-count-pill">共 {{ entries|length }} 条</span>
+    </div>
+
+    {% if entries %}
+    <div class="aiw-entries">
+        {% for entry in entries %}
+        <div class="aiw-entry{% if not entry.is_active %} is-disabled{% endif %}" data-scope="{{ entry.scope }}">
+            {% if can_edit %}
+            <form method="post" action="{{ url_for('ai_workshop_knowhow_update', entry_id=entry.id) }}">
+                <div class="aiw-entry-compact-row">
+                    <div class="aiw-entry-main">
+                        <textarea name="content" rows="2" required>{{ entry.content }}</textarea>
+                    </div>
+                    <div class="aiw-entry-actions">
+                        <div class="aiw-entry-toolbar">
+                            <select class="meeting-filter-control aiw-entry-select" name="category_id">
+                                {% for category in categories %}
+                                <option value="{{ category.id }}" {% if entry.category_id == category.id %}selected{% endif %}>{{ category.name }}</option>
+                                {% endfor %}
+                                {% if entry.category_id is none %}
+                                <option value="" selected>未分类</option>
+                                {% endif %}
+                            </select>
+                            <label class="aiw-switch compact">
+                                <input type="checkbox" name="is_active" value="1" {% if entry.is_active %}checked{% endif %}>
+                                <span></span>
+                            </label>
+                            <span class="aiw-entry-button-group">
+                                <button class="btn btn-secondary btn-sm aiw-entry-icon-action" type="submit" title="保存" aria-label="保存">{{ icons.icon('save') }}</button>
+                                <button class="btn btn-outline btn-sm aiw-entry-icon-action" type="submit" form="delete-knowhow-{{ entry.id }}" title="删除" aria-label="删除">{{ icons.icon('trash') }}</button>
+                            </span>
+                        </div>
+                        <div class="aiw-entry-meta aiw-entry-edit-meta">
+                            {{ entry.updater.display_name if entry.updater else (entry.creator.display_name if entry.creator else '系统') }}
+                            · {{ format_local_datetime(entry.updated_at) }}
+                        </div>
+                    </div>
+                </div>
+            </form>
+            <form method="post" action="{{ url_for('ai_workshop_knowhow_delete', entry_id=entry.id) }}"
+                  onsubmit="return confirm('确认删除这条 know-how？');"
+                  id="delete-knowhow-{{ entry.id }}"
+                  class="aiw-entry-delete">
+            </form>
+            {% else %}
+            <div class="aiw-entry-head">
+                <span class="aiw-entry-category">{{ entry.category.name if entry.category else '未分类' }}</span>
+                <span class="aiw-entry-status{% if not entry.is_active %} is-off{% endif %}">{{ '启用' if entry.is_active else '停用' }}</span>
+            </div>
+            <div class="aiw-entry-content">{{ entry.content }}</div>
+            <div class="aiw-entry-foot">
+                <span class="aiw-entry-meta">
+                    {{ entry.updater.display_name if entry.updater else (entry.creator.display_name if entry.creator else '系统') }}
+                    · {{ format_local_datetime(entry.updated_at) }}
+                </span>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="aiw-empty compact-empty">
+        {{ icons.icon('drafts') }}
+        <p>{{ scope_label(scope) }} 暂无 know-how 沉淀。</p>
+        {% if can_edit %}<p class="muted">把第一条经验写进上方编辑区即可。</p>{% endif %}
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

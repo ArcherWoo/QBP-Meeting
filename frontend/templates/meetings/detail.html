@@ -1,0 +1,990 @@
+{% extends "base.html" %}
+{% import "macros/icons.html" as icons %}
+{% block title %}{{ meeting.meeting_no }} - QBP Meeting MGMT{% endblock %}
+{% block content %}
+{% set reviewer = can_review_meeting(meeting) or can_manage_meetings() %}
+{% set detail_mode = 'report' if request.args.get('mode') == 'report' else 'prepare' %}
+<div data-meeting-detail-mode-root data-mode="{{ 'report' if request.args.get('mode') == 'report' else 'prepare' }}">
+<div class="card">
+    <div class="page-header" style="margin-bottom: 0;">
+        <div>
+            <h1>{{ icons.icon('meeting', 'icon-title') }} {{ meeting.meeting_no }} <span class="badge {{ meeting.status }}">{{ meeting_status_labels[meeting.status] }}</span></h1>
+            <p class="muted">{{ meeting.title }} | {{ meeting.meeting_date.strftime('%Y-%m-%d') }} | {{ meeting.location or '-' }} | 主持人：{{ meeting.host or (meeting.host_user.display_name if meeting.host_user else '-') }}</p>
+        </div>
+        <div class="page-header-actions">
+            <div class="meeting-mode-toggle" data-meeting-mode-toggle role="group" aria-label="会议详情模式">
+                <button class="meeting-mode-option active" type="button" data-meeting-mode-option="prepare" aria-pressed="true">准备模式</button>
+                <button class="meeting-mode-option" type="button" data-meeting-mode-option="report" aria-pressed="false">汇报模式</button>
+            </div>
+            <button class="btn btn-outline copilot-header-trigger" type="button" data-copilot-open title="打开 Copilot">
+                {{ icons.icon('magic', 'icon-copilot') }} Copilot
+            </button>
+            <a href="{{ url_for('meeting_list') }}" class="btn btn-secondary">{{ icons.icon('back') }} 返回列表</a>
+        </div>
+    </div>
+</div>
+
+{% if reviewer and pending_topics %}
+<div class="card">
+    <div class="card-title">{{ icons.icon('shield') }} 待审批议题</div>
+    <div class="approval-list">
+        {% for topic in pending_topics %}
+        <div class="approval-row {% if selected_topic and selected_topic.id == topic.id %}active{% endif %}">
+            <div>
+                <strong>{{ topic.title }}</strong>
+                {% if selected_topic and selected_topic.id == topic.id %}<span class="badge submitted">查看中</span>{% endif %}
+                <div class="muted">{{ topic.plan_version or 'Q3 26BP' }} | {{ topic.category or '未分类' }} | {{ topic.owner or topic.creator.display_name if topic.creator else '未指定' }} | 申请加入 {{ topic.requested_meeting.meeting_no if topic.requested_meeting else '-' }} | 附件 {{ topic.attachments.count() }}</div>
+                {% if topic.background %}<p>{{ topic.background }}</p>{% endif %}
+            </div>
+            <div class="split-actions">
+                <a class="btn btn-outline btn-sm" data-preserve-meeting-mode-link href="{{ url_for('meeting_detail', meeting_no=meeting.meeting_no, topic_id=topic.id, mode='report' if detail_mode == 'report' else none) }}">{{ icons.icon('eye') }} 查看详情</a>
+                <form method="post" action="{{ url_for('topic_approve', topic_id=topic.id) }}">
+                    <button class="btn btn-success btn-sm" type="submit">{{ icons.icon('save') }} 通过</button>
+                </form>
+                <form method="post" action="{{ url_for('topic_reject', topic_id=topic.id) }}" class="split-actions">
+                    <input name="review_comment" placeholder="驳回原因">
+                    <button class="btn btn-secondary btn-sm" type="submit">{{ icons.icon('close') }} 驳回</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="detail-layout">
+    <div class="detail-sidebar">
+        <div class="card" id="topic-list-card">
+            <div class="card-title card-title-action">
+                <span>{{ icons.icon('layers') }} 议题列表</span>
+                {% if reviewer %}
+                <button class="icon-btn icon-btn-success" id="open-topic-create-modal" type="button" aria-label="新增议题" title="新增议题">
+                    {{ icons.icon('plus') }}
+                </button>
+                {% endif %}
+            </div>
+            <div class="topic-list {% if reviewer %}topic-sortable{% endif %}"
+                 {% if reviewer %}data-reorder-url="{{ url_for('topic_reorder', meeting_no=meeting.meeting_no) }}"{% endif %}>
+                {% for topic in topics %}
+                <div class="topic-item-wrap" data-topic-id="{{ topic.id }}" data-topic-duration="{{ topic.duration_minutes }}" {% if reviewer %}draggable="true"{% endif %}>
+                    <a class="topic-item {% if selected_topic and selected_topic.id == topic.id %}active{% endif %}"
+                       data-preserve-meeting-mode-link
+                       href="{{ url_for('meeting_detail', meeting_no=meeting.meeting_no, topic_id=topic.id, mode='report' if detail_mode == 'report' else none) }}">
+                        <strong>{{ topic.title }}</strong>
+                    </a>
+                    <div class="topic-item-footer">
+                        <div class="topic-timer" data-topic-timer data-topic-id="{{ topic.id }}" data-topic-duration="{{ topic.duration_minutes }}">
+                            <button class="topic-timer-button" type="button" data-topic-timer-button aria-label="开始 {{ topic.title }} 倒计时" title="开始倒计时">
+                                <span class="topic-timer-remaining" data-topic-timer-remaining>{{ '%02d:%02d'|format(topic.duration_minutes, 0) }}</span>
+                            </button>
+                        </div>
+                        <div class="topic-item-status">
+                            {% if topic.workflow_status != 'approved' %}
+                            <span class="badge {{ topic.workflow_status }}" data-meeting-mode-panel="prepare">{{ workflow_status_labels[topic.workflow_status] }}</span>
+                            {% else %}
+                            <span class="badge {{ topic.status }}" data-meeting-mode-panel="prepare">{{ topic_status_labels[topic.status] }}</span>
+                            {% endif %}
+                            <span class="badge decision-{{ topic.decision_status }}" data-meeting-mode-panel="report">{{ topic_decision_status_labels[topic.decision_status] }}</span>
+                        </div>
+                    </div>
+                    {% if reviewer %}
+                    <form class="topic-delete-form" method="post" action="{{ url_for('topic_delete', topic_id=topic.id) }}" onsubmit="return confirm('确定删除这个议题吗？');">
+                        <button class="topic-delete-icon" type="submit" aria-label="删除议题" title="删除议题">{{ icons.icon('trash', 'icon-small') }}</button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% else %}
+                <p class="muted">暂无可见议题</p>
+                {% endfor %}
+            </div>
+            {% if reviewer %}
+            <div class="topic-sort-status" id="topic-sort-status" aria-live="polite"></div>
+            {% endif %}
+        </div>
+
+        <div class="card" id="minutes-list-card">
+            <div class="card-title">{{ icons.icon('minutes') }} 会议纪要</div>
+            <div class="topic-list">
+                <div class="topic-item-wrap">
+                    <a class="topic-item {% if view == 'minutes' %}active{% endif %}"
+                       data-preserve-meeting-mode-link
+                       href="{{ url_for('meeting_detail', meeting_no=meeting.meeting_no, view='minutes', mode='report' if detail_mode == 'report' else none) }}">
+                        <strong>本场会议纪要</strong>
+                    </a>
+                    <div class="topic-item-footer minutes-item-footer">
+                        {% if minutes and (minutes.summary or minutes.decisions or minutes.action_items) %}
+                        <span class="badge ready">已记录</span>
+                        {% else %}
+                        <span class="badge pending">未记录</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="detail-main">
+        {% if view == 'minutes' %}
+        {% if reviewer %}
+        <div class="card" id="minutes-card">
+            <div class="card-title">{{ icons.icon('minutes') }} 会议纪要</div>
+            <form method="post" action="{{ url_for('minutes_update', meeting_no=meeting.meeting_no) }}">
+                <div class="grid grid-2">
+                    <div class="form-group"><label>Summary</label><textarea name="summary">{{ minutes.summary if minutes else '' }}</textarea></div>
+                    <div class="form-group"><label>Decisions</label><textarea name="decisions">{{ minutes.decisions if minutes else '' }}</textarea></div>
+                </div>
+                <div class="grid grid-2">
+                    <div class="form-group"><label>Action Items</label><textarea name="action_items">{{ minutes.action_items if minutes else '' }}</textarea></div>
+                    <div class="form-group"><label>会议状态</label>
+                        <select name="meeting_status">
+                            <option value="draft" {% if meeting.status == 'draft' %}selected{% endif %}>草稿</option>
+                            <option value="preparing" {% if meeting.status == 'preparing' %}selected{% endif %}>准备中</option>
+                            <option value="reporting" {% if meeting.status == 'reporting' %}selected{% endif %}>汇报中</option>
+                            <option value="completed" {% if meeting.status == 'completed' %}selected{% endif %}>已完成</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="btn btn-success" type="submit">{{ icons.icon('save') }} 保存纪要</button>
+            </form>
+        </div>
+        {% else %}
+        <div class="card" id="minutes-card">
+            <div class="card-title">{{ icons.icon('minutes') }} 会议纪要</div>
+            {% if minutes %}
+            <div class="readonly-topic">
+                <dl>
+                    <dt>Summary</dt><dd>{{ minutes.summary or '-' }}</dd>
+                    <dt>Decisions</dt><dd>{{ minutes.decisions or '-' }}</dd>
+                    <dt>Action Items</dt><dd>{{ minutes.action_items or '-' }}</dd>
+                </dl>
+            </div>
+            {% else %}
+            <p class="muted">本场会议暂无纪要。</p>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% elif selected_topic %}
+        <div class="card" id="topic-info-card">
+            <div class="card-title">{{ icons.icon('info') }} 议题信息</div>
+            {% if can_edit_topic(selected_topic) %}
+            <form id="topic-update-form" method="post" action="{{ url_for('topic_update', topic_id=selected_topic.id) }}" data-report-mode-lock>
+                <div class="grid grid-3">
+                    <div class="form-group"><label>议题标题</label><input name="title" value="{{ selected_topic.title }}" required></div>
+                    <div class="form-group"><label>类别</label><input value="{{ selected_topic.category or meeting.category }}" readonly></div>
+                    <div class="form-group"><label>Plan Version</label><input value="{{ selected_topic.plan_version_name }}" readonly></div>
+                    <div class="form-group"><label>Round</label><input value="{{ selected_topic.plan_round_name }}" readonly></div>
+                    <div class="form-group"><label>汇报人</label><input name="owner" value="{{ selected_topic.owner or '' }}"></div>
+                    <div class="form-group"><label>汇报时长</label>
+                        <div class="duration-stepper duration-stepper-integrated" data-duration-stepper aria-label="汇报时长 {{ selected_topic.duration_minutes }} 分钟">
+                            <button type="button" class="duration-stepper-button" data-duration-step="-5" aria-label="减少 5 分钟">-</button>
+                            <input name="duration_minutes" type="text" inputmode="numeric" pattern="[0-9]*" value="{{ selected_topic.duration_minutes }}" data-duration-input aria-label="汇报时长分钟数">
+                            <button type="button" class="duration-stepper-button" data-duration-step="5" aria-label="增加 5 分钟">+</button>
+                            <span class="duration-stepper-unit">分钟</span>
+                        </div>
+                    </div>
+                    <div class="form-group" data-meeting-mode-panel="prepare"><label>状态</label>
+                        <select name="status">
+                            <option value="pending" {% if selected_topic.status == 'pending' %}selected{% endif %}>待准备</option>
+                            <option value="ready" {% if selected_topic.status == 'ready' %}selected{% endif %}>已就绪</option>
+                            <option value="presented" {% if selected_topic.status == 'presented' %}selected{% endif %}>已汇报</option>
+                        </select>
+                    </div>
+                    <div class="form-group" data-meeting-mode-panel="report"><label>现场决策</label>
+                        <div class="topic-decision-display">
+                            <span class="badge decision-{{ selected_topic.decision_status }}">{{ topic_decision_status_labels[selected_topic.decision_status] }}</span>
+                            {% if selected_topic.decision_user %}
+                            <span>决策人：{{ selected_topic.decision_user.display_name }}</span>
+                            {% endif %}
+                            {% if selected_topic.decision_at %}
+                            <span>决策时间：{{ format_local_datetime(selected_topic.decision_at) }}</span>
+                            {% endif %}
+                            {% if selected_topic.decision_comment %}
+                            <span>条件/说明：{{ selected_topic.decision_comment }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="grid grid-2">
+                    <div class="form-group"><label>背景</label><textarea name="background" placeholder="输入BP背景、当前状态或关键风险">{{ selected_topic.background or '' }}</textarea></div>
+                    <div class="form-group"><label>目的</label><textarea name="purpose" placeholder="输入本次汇报需要达成的目标">{{ selected_topic.purpose or '' }}</textarea></div>
+                </div>
+            </form>
+            <div class="topic-decision-actions">
+                <button class="btn btn-success" data-meeting-mode-panel="prepare" type="submit" form="topic-update-form">{{ icons.icon('save') }} 保存议题</button>
+                {% if can_decide_meeting_topic(selected_topic) %}
+                <div class="topic-decision-buttons" data-meeting-mode-panel="report">
+                    <form method="post" action="{{ url_for('topic_meeting_decision', topic_id=selected_topic.id) }}">
+                        <input type="hidden" name="mode" value="report">
+                        <input type="hidden" name="decision" value="rejected">
+                        <button class="btn btn-secondary" type="submit">{{ icons.icon('close') }} 驳回</button>
+                    </form>
+                    <form method="post" action="{{ url_for('topic_meeting_decision', topic_id=selected_topic.id) }}" data-conditional-decision-form>
+                        <input type="hidden" name="mode" value="report">
+                        <input type="hidden" name="decision" value="conditional_approved">
+                        <input type="hidden" name="decision_comment" data-conditional-decision-comment>
+                        <button class="btn btn-outline" type="submit">{{ icons.icon('save') }} 有条件通过</button>
+                    </form>
+                    <form method="post" action="{{ url_for('topic_meeting_decision', topic_id=selected_topic.id) }}">
+                        <input type="hidden" name="mode" value="report">
+                        <input type="hidden" name="decision" value="delayed">
+                        <button class="btn btn-secondary" type="submit">{{ icons.icon('back') }} 延期</button>
+                    </form>
+                    <form method="post" action="{{ url_for('topic_meeting_decision', topic_id=selected_topic.id) }}">
+                        <input type="hidden" name="mode" value="report">
+                        <input type="hidden" name="decision" value="approved">
+                        <button class="btn btn-success" type="submit">{{ icons.icon('save') }} 通过</button>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="readonly-topic">
+                <dl>
+                    <dt>类别</dt><dd>{{ selected_topic.category or '-' }}</dd>
+                    <dt>Plan Version</dt><dd>{{ selected_topic.plan_version or '-' }}</dd>
+                    <dt>汇报人</dt><dd>{{ selected_topic.owner or '-' }}</dd>
+                    <dt>汇报时长</dt><dd>{{ selected_topic.duration_minutes }} 分钟</dd>
+                    <dt>状态</dt><dd>{{ workflow_status_labels[selected_topic.workflow_status] if selected_topic.workflow_status != 'approved' else topic_status_labels[selected_topic.status] }}</dd>
+                    <dt>现场决策</dt><dd>{{ topic_decision_status_labels[selected_topic.decision_status] }}</dd>
+                    {% if selected_topic.decision_user %}<dt>决策人</dt><dd>{{ selected_topic.decision_user.display_name }}</dd>{% endif %}
+                    {% if selected_topic.decision_at %}<dt>决策时间</dt><dd>{{ format_local_datetime(selected_topic.decision_at) }}</dd>{% endif %}
+                    <dt>背景</dt><dd>{{ selected_topic.background or '-' }}</dd>
+                    <dt>目的</dt><dd>{{ selected_topic.purpose or '-' }}</dd>
+                </dl>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="card" id="topic-attachments-card" data-report-mode-lock>
+            <div class="card-title">{{ icons.icon('paperclip') }} 议题附件</div>
+            {% if can_edit_topic(selected_topic) %}
+            <form method="post" action="{{ url_for('attachment_upload', topic_id=selected_topic.id) }}" enctype="multipart/form-data" class="draft-upload-form">
+                <input id="meeting-topic-attachment-file" class="visually-hidden-file" type="file" name="file" required data-auto-submit>
+                <label class="file-upload-shell" for="meeting-topic-attachment-file">
+                    <span class="file-upload-button">{{ icons.icon('upload') }} 上传</span>
+                    <span class="file-upload-name" data-empty="未选择任何文件">未选择任何文件</span>
+                </label>
+            </form>
+            <p class="muted" style="margin-top: 8px;">支持 PPT、Word、PDF、Excel、PNG、JPG。PPT、PDF 和图片可直接预览。</p>
+            {% endif %}
+            <div class="attachment-list">
+                {% for attachment in selected_topic_attachments %}
+                <div class="attachment-row">
+                    <div>
+                        <strong>{{ attachment.original_filename }}</strong>
+                        <div class="muted">{{ attachment.effective_file_type|upper or 'FILE' }} | {{ (attachment.file_size / 1024)|round(1) }} KB</div>
+                        <div class="muted">材料索引：{{ attachment.material_document.status_label if attachment.material_document else '未进入材料知识库' }}{% if attachment.material_document and attachment.material_document.error_message %} | {{ attachment.material_document.error_message }}{% endif %}</div>
+                    </div>
+                    <div class="split-actions">
+                        {% if attachment.can_preview_inline %}
+                        <button class="btn btn-outline btn-sm attachment-preview-button"
+                                type="button"
+                                data-preview-url="{{ url_for('attachment_preview', attachment_id=attachment.id) }}"
+                                data-download-url="{{ url_for('attachment_download', attachment_id=attachment.id) }}"
+                                data-filename="{{ attachment.original_filename }}"
+                                data-filetype="{{ attachment.effective_file_type }}"
+                                data-is-image="{{ '1' if attachment.is_image else '0' }}"
+                                data-topic-id="{{ selected_topic.id }}"
+                                data-topic-title="{{ selected_topic.title }}"
+                                data-topic-duration="{{ selected_topic.duration_minutes }}">
+                            {{ icons.icon('eye') }} 预览
+                        </button>
+                        {% endif %}
+                        <a class="btn btn-sm" href="{{ url_for('attachment_download', attachment_id=attachment.id) }}">{{ icons.icon('download') }} 下载</a>
+                        {% if can_edit_topic(selected_topic) %}
+                        <form method="post" action="{{ url_for('attachment_delete', attachment_id=attachment.id) }}" onsubmit="return confirm('确认删除该附件？');">
+                            <button class="btn btn-secondary btn-sm" type="submit">{{ icons.icon('trash') }} 删除</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% else %}
+                <p class="muted">还没有上传附件。</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        {% set readiness = selected_topic_readiness %}
+        {% set latest_review = readiness.latest_review %}
+        <div class="card" id="topic-material-review-card" data-report-mode-lock>
+            <div class="card-title">{{ icons.icon('shield') }} 材料 Review</div>
+            <div class="review-summary">
+                <div class="readiness-cell">
+                    <div class="readiness-line">
+                        <strong>{{ readiness.score }}%</strong>
+                        {% if readiness.review_passed %}
+                        <span class="badge readiness-ready">材料已通过</span>
+                        {% else %}
+                        <span class="badge readiness-preparing">待 Review</span>
+                        {% endif %}
+                    </div>
+                    <div class="readiness-bar"><span style="width: {{ readiness.score }}%;"></span></div>
+                    <div class="muted">缺口：{{ readiness.missing|join('、') if readiness.missing else '无' }}</div>
+                </div>
+                {% if latest_review %}
+                <div class="readonly-topic">
+                    <dl>
+                        <dt>最近来源</dt><dd>{{ 'Hoster' if latest_review.source == 'hoster' else 'AI' }}</dd>
+                        <dt>评审口径</dt><dd>{{ latest_review.prompt_name_snapshot or '未记录' }}</dd>
+                        <dt>最近结果</dt><dd>{{ '通过' if latest_review.result == 'approved' else '需补充' }} | {{ latest_review.score }} 分</dd>
+                        <dt>Review 总结</dt><dd>{{ latest_review.summary or '-' }}</dd>
+                        <dt>问题</dt><dd>{{ latest_review.issues or '-' }}</dd>
+                        <dt>建议</dt><dd>{{ latest_review.suggestions or '-' }}</dd>
+                    </dl>
+                    {% if latest_review.source == 'ai' and latest_review.knowhow_snapshot %}
+                    <details class="knowhow-snapshot">
+                        <summary class="muted">本次 AI Review 参考了 {{ latest_review.knowhow_snapshot|length }} 条 know-how（点击展开）</summary>
+                        <ul class="knowhow-snapshot-list">
+                            {% for entry in latest_review.knowhow_snapshot %}
+                            <li><span class="badge">{{ entry.scope }}</span> {{ entry.content }}</li>
+                            {% endfor %}
+                        </ul>
+                    </details>
+                    {% endif %}
+                </div>
+                {% else %}
+                <p class="muted">暂无材料 Review。Hoster 可先手动 Review，AI Review 后续复用智枢配置。</p>
+                {% endif %}
+            </div>
+            {% if reviewer %}
+            <form id="material-review-form" method="post" action="{{ url_for('topic_material_review_create', topic_id=selected_topic.id) }}" class="review-form">
+                <div class="grid grid-3">
+                    <div class="form-group"><label>Review 结果</label>
+                        <select name="result">
+                            <option value="approved">通过材料</option>
+                            <option value="needs_revision">要求补充</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>评分</label><input name="score" type="number" min="0" max="100" value="{{ latest_review.score if latest_review else 80 }}"></div>
+                    <div class="form-group"><label>Review 来源</label><input value="Hoster" readonly></div>
+                </div>
+                <div class="grid grid-3">
+                    <div class="form-group"><label>总结</label><textarea name="summary" placeholder="材料是否完整、是否可上会"></textarea></div>
+                    <div class="form-group"><label>问题</label><textarea name="issues" placeholder="需要补充的问题"></textarea></div>
+                    <div class="form-group"><label>建议</label><textarea name="suggestions" placeholder="给议题 owner 的建议"></textarea></div>
+                </div>
+                <div class="review-action-row">
+                    <div class="form-group review-prompt-picker">
+                        <label>提示词</label>
+                        <select name="prompt_id" form="material-review-form" data-review-prompt-select>
+                            {% for prompt in selected_topic_review_prompts %}
+                            <option value="{{ prompt.id }}" {% if selected_topic_review_prompt and prompt.id == selected_topic_review_prompt.id %}selected{% endif %}>
+                                {{ prompt.name }} · {{ prompt.scope_label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="split-actions">
+                        <button class="btn btn-success" type="submit">{{ icons.icon('save') }} 保存 Review</button>
+                        <button class="btn btn-outline" type="submit" form="ai-review-form">{{ icons.icon('wand') }} AI Review</button>
+                    </div>
+                </div>
+            </form>
+            <form id="ai-review-form" method="post" action="{{ url_for('topic_material_review_ai', topic_id=selected_topic.id) }}">
+                <input type="hidden" name="prompt_id" data-review-prompt-hidden value="{{ selected_topic_review_prompt.id if selected_topic_review_prompt else '' }}">
+            </form>
+            {% endif %}
+        </div>
+
+        {% else %}
+        <div class="card"><p class="muted">暂无可见议题。普通用户可以在议题池创建自己的议题，并申请加入这场会议。</p></div>
+        {% endif %}
+    </div>
+</div>
+</div>
+
+{% if reviewer %}
+<div class="preview-modal topic-create-modal" id="topic-create-modal" aria-hidden="true">
+    <div class="preview-modal-backdrop" data-topic-create-close></div>
+    <div class="preview-modal-dialog compact-modal" role="dialog" aria-modal="true" aria-labelledby="topic-create-title">
+        <div class="preview-modal-header">
+            <div>
+                <div class="preview-modal-kicker">议题</div>
+                <h2 id="topic-create-title">新增议题</h2>
+            </div>
+            <button class="btn btn-secondary btn-sm" type="button" data-topic-create-close>{{ icons.icon('close') }} 关闭</button>
+        </div>
+        <form class="modal-form" method="post" action="{{ url_for('topic_create', meeting_no=meeting.meeting_no) }}">
+            <div class="form-group"><label>议题标题</label><input name="title" placeholder="例如：OP Cum Yields" required></div>
+            <div class="form-group"><label>类别</label><input value="{{ meeting.category }}" readonly></div>
+            <div class="form-group"><label>Plan Version</label><input value="{{ meeting.plan_version_name }}" readonly></div>
+            <div class="form-group"><label>Round</label><input value="{{ meeting.plan_round_name }}" readonly></div>
+            <div class="form-group"><label>汇报人</label><input name="owner" placeholder="议题 presenter"></div>
+            <div class="form-group"><label>汇报时长</label>
+                <div class="duration-stepper duration-stepper-integrated" data-duration-stepper>
+                    <button type="button" class="duration-stepper-button" data-duration-step="-5" aria-label="减少 5 分钟">-</button>
+                    <input name="duration_minutes" type="text" inputmode="numeric" pattern="[0-9]*" value="{{ topic_duration_default_minutes }}" data-duration-input aria-label="汇报时长分钟数">
+                    <button type="button" class="duration-stepper-button" data-duration-step="5" aria-label="增加 5 分钟">+</button>
+                    <span class="duration-stepper-unit">分钟</span>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" type="button" data-topic-create-close>取消</button>
+                <button class="btn btn-success" type="submit">{{ icons.icon('plus') }} 添加议题</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="preview-modal" id="attachment-preview-modal" aria-hidden="true">
+    <div class="preview-modal-backdrop" data-preview-close></div>
+    <div class="preview-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="attachment-preview-title" data-resizable-preview="1">
+        <div class="preview-modal-header">
+            <div>
+                <div class="preview-modal-kicker">附件预览</div>
+                <h2 id="attachment-preview-title">预览</h2>
+            </div>
+            <div class="preview-topic-timer" id="attachment-preview-topic-timer" data-preview-topic-timer hidden>
+                <span class="preview-topic-name" id="attachment-preview-topic-title"></span>
+                <button class="topic-timer-button preview-topic-timer-button" type="button" data-preview-topic-timer-button aria-label="开始倒计时" title="开始倒计时">
+                    <span class="topic-timer-remaining" data-preview-topic-timer-remaining>00:00</span>
+                </button>
+            </div>
+            <div class="split-actions">
+                <a class="btn btn-sm" id="attachment-preview-download" href="#">{{ icons.icon('download') }} 下载</a>
+                <button class="btn btn-secondary btn-sm" type="button" data-preview-close>{{ icons.icon('close') }} 关闭</button>
+            </div>
+        </div>
+        <div class="preview-modal-body" id="attachment-preview-body">
+            <iframe id="attachment-preview-frame" title="附件预览"></iframe>
+            <img id="attachment-preview-image" alt="附件预览">
+        </div>
+        <span class="preview-resize-handle preview-resize-n" data-preview-resize="n" aria-hidden="true"></span>
+        <span class="preview-resize-handle preview-resize-s" data-preview-resize="s" aria-hidden="true"></span>
+        <span class="preview-resize-handle preview-resize-e" data-preview-resize="e" aria-hidden="true"></span>
+        <span class="preview-resize-handle preview-resize-w" data-preview-resize="w" aria-hidden="true"></span>
+        <span class="preview-resize-handle preview-resize-ne" data-preview-resize="ne" aria-hidden="true"></span>
+        <span class="preview-resize-handle preview-resize-nw" data-preview-resize="nw" aria-hidden="true"></span>
+        <span class="preview-resize-handle preview-resize-se" data-preview-resize="se" aria-hidden="true"></span>
+        <span class="preview-resize-handle preview-resize-sw" data-preview-resize="sw" aria-hidden="true"></span>
+    </div>
+</div>
+
+<script>
+window.AppShell.ready(function () {
+    var modal = document.getElementById("attachment-preview-modal");
+    var topicModal = document.getElementById("topic-create-modal");
+    var topicOpenButton = document.getElementById("open-topic-create-modal");
+    var modeRoot = document.querySelector("[data-meeting-detail-mode-root]");
+    var modeButtons = modeRoot ? Array.prototype.slice.call(modeRoot.querySelectorAll("[data-meeting-mode-option]")) : [];
+    var reportModeLockRoots = modeRoot ? Array.prototype.slice.call(modeRoot.querySelectorAll("[data-report-mode-lock]")) : [];
+    var sortableTopicList = document.querySelector(".topic-sortable");
+    var sortStatus = document.getElementById("topic-sort-status");
+    var title = document.getElementById("attachment-preview-title");
+    var download = document.getElementById("attachment-preview-download");
+    var frame = document.getElementById("attachment-preview-frame");
+    var image = document.getElementById("attachment-preview-image");
+    var previewDialog = modal ? modal.querySelector("[data-resizable-preview]") : null;
+    var previewTopicTimer = document.getElementById("attachment-preview-topic-timer");
+    var previewTopicTitle = document.getElementById("attachment-preview-topic-title");
+    var previewTopicRemaining = previewTopicTimer ? previewTopicTimer.querySelector("[data-preview-topic-timer-remaining]") : null;
+    var previewTopicTimerButton = previewTopicTimer ? previewTopicTimer.querySelector("[data-preview-topic-timer-button]") : null;
+    var previewResize = null;
+    var draggedTopic = null;
+    var originalTopicOrder = null;
+    var topicTimerStates = {};
+    var previewTimerTopicId = "";
+
+    function lockReportModeControls(locked) {
+        reportModeLockRoots.forEach(function (container) {
+            Array.prototype.forEach.call(container.querySelectorAll("input, select, textarea, button"), function (control) {
+                if (control.hasAttribute("data-meeting-mode-panel")) return;
+                if (!control.hasAttribute("data-lock-original-disabled")) {
+                    control.setAttribute("data-lock-original-disabled", control.disabled ? "1" : "0");
+                }
+                if (!control.hasAttribute("data-lock-original-readonly")) {
+                    control.setAttribute("data-lock-original-readonly", control.readOnly ? "1" : "0");
+                }
+                if (locked) {
+                    control.disabled = true;
+                    if (control.tagName === "INPUT" || control.tagName === "TEXTAREA") {
+                        control.readOnly = true;
+                    }
+                } else {
+                    control.disabled = control.getAttribute("data-lock-original-disabled") === "1";
+                    if (control.tagName === "INPUT" || control.tagName === "TEXTAREA") {
+                        control.readOnly = control.getAttribute("data-lock-original-readonly") === "1";
+                    }
+                }
+            });
+        });
+    }
+
+    function syncMeetingDetailModeUrl(mode) {
+        var url;
+        if (!window.history || !window.history.replaceState) return;
+        url = new URL(window.location.href);
+        if (mode === "report") {
+            url.searchParams.set("mode", "report");
+        } else {
+            url.searchParams.delete("mode");
+        }
+        window.history.replaceState(null, "", url.toString());
+    }
+
+    function syncMeetingDetailModeLinks(mode) {
+        Array.prototype.forEach.call(document.querySelectorAll("[data-preserve-meeting-mode-link]"), function (link) {
+            var url = new URL(link.getAttribute("href"), window.location.href);
+            if (mode === "report") {
+                url.searchParams.set("mode", "report");
+            } else {
+                url.searchParams.delete("mode");
+            }
+            link.setAttribute("href", url.toString());
+        });
+    }
+
+    function setMeetingDetailMode(mode) {
+        var selectedMode = mode === "report" ? "report" : "prepare";
+        if (!modeRoot) return;
+        modeRoot.setAttribute("data-mode", selectedMode);
+        modeButtons.forEach(function (button) {
+            var active = button.getAttribute("data-meeting-mode-option") === selectedMode;
+            button.classList.toggle("active", active);
+            button.setAttribute("aria-pressed", active ? "true" : "false");
+        });
+        lockReportModeControls(selectedMode === "report");
+        syncMeetingDetailModeUrl(selectedMode);
+        syncMeetingDetailModeLinks(selectedMode);
+    }
+
+    modeButtons.forEach(function (button) {
+        button.addEventListener("click", function () {
+            setMeetingDetailMode(button.getAttribute("data-meeting-mode-option"));
+        });
+    });
+    setMeetingDetailMode(modeRoot ? modeRoot.getAttribute("data-mode") : "prepare");
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-conditional-decision-form]"), function (form) {
+        form.addEventListener("submit", function (event) {
+            var input = form.querySelector("[data-conditional-decision-comment]");
+            var value = window.prompt("请填写有条件通过的条件：", input ? input.value : "");
+            if (value === null) {
+                event.preventDefault();
+                return;
+            }
+            value = value.trim();
+            if (!value) {
+                event.preventDefault();
+                window.alert("请填写有条件通过的条件");
+                return;
+            }
+            if (input) input.value = value;
+        });
+    });
+
+    var reviewPromptSelect = document.querySelector("[data-review-prompt-select]");
+    var reviewPromptHidden = document.querySelector("[data-review-prompt-hidden]");
+    if (reviewPromptSelect && reviewPromptHidden) {
+        function syncReviewPrompt() {
+            reviewPromptHidden.value = reviewPromptSelect.value || "";
+        }
+        syncReviewPrompt();
+        reviewPromptSelect.addEventListener("change", syncReviewPrompt);
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll(".visually-hidden-file"), function (input) {
+        var shell = document.querySelector('label[for="' + input.id + '"]');
+        var name = shell ? shell.querySelector(".file-upload-name") : null;
+        input.addEventListener("change", function () {
+            if (name) {
+                name.textContent = input.files && input.files.length ? input.files[0].name : name.getAttribute("data-empty");
+            }
+            if (input.hasAttribute("data-auto-submit") && input.files && input.files.length) {
+                input.form.submit();
+            }
+        });
+    });
+
+    function openModal(target) {
+        if (!target) return;
+        target.classList.add("open");
+        target.setAttribute("aria-hidden", "false");
+        document.body.classList.add("modal-open");
+    }
+
+    function closeModal(target) {
+        if (!target) return;
+        target.classList.remove("open");
+        target.setAttribute("aria-hidden", "true");
+        document.body.classList.remove("modal-open");
+    }
+
+    function clearPreview() {
+        if (frame) frame.removeAttribute("src");
+        if (image) image.removeAttribute("src");
+        setPreviewTopicTimer(null);
+    }
+
+    function closePreview() {
+        closeModal(modal);
+        clearPreview();
+    }
+
+    function resetPreviewDialogSize() {
+        if (!previewDialog) return;
+        previewDialog.style.width = "";
+        previewDialog.style.height = "";
+    }
+
+    function previewBounds() {
+        return {
+            minWidth: Math.min(720, window.innerWidth - 32),
+            minHeight: Math.min(520, window.innerHeight - 32),
+            maxWidth: Math.max(320, window.innerWidth - 32),
+            maxHeight: Math.max(260, window.innerHeight - 32),
+        };
+    }
+
+    function clampPreviewSize(value, minimum, maximum) {
+        return Math.max(minimum, Math.min(maximum, value));
+    }
+
+    function applyPreviewResize(event) {
+        var bounds;
+        var width;
+        var height;
+        if (!previewResize || !previewDialog) return;
+        bounds = previewBounds();
+        width = previewResize.width;
+        height = previewResize.height;
+        if (previewResize.direction.indexOf("e") !== -1) {
+            width = previewResize.width + event.clientX - previewResize.x;
+        }
+        if (previewResize.direction.indexOf("w") !== -1) {
+            width = previewResize.width + previewResize.x - event.clientX;
+        }
+        if (previewResize.direction.indexOf("s") !== -1) {
+            height = previewResize.height + event.clientY - previewResize.y;
+        }
+        if (previewResize.direction.indexOf("n") !== -1) {
+            height = previewResize.height + previewResize.y - event.clientY;
+        }
+        previewDialog.style.width = clampPreviewSize(width, bounds.minWidth, bounds.maxWidth) + "px";
+        previewDialog.style.height = clampPreviewSize(height, bounds.minHeight, bounds.maxHeight) + "px";
+    }
+
+    function stopPreviewResize() {
+        if (!previewResize) return;
+        previewResize = null;
+        document.body.classList.remove("preview-resizing");
+        document.removeEventListener("mousemove", applyPreviewResize);
+        document.removeEventListener("mouseup", stopPreviewResize);
+    }
+
+    function startPreviewResize(event) {
+        var rect;
+        if (!previewDialog || window.innerWidth < 760) return;
+        event.preventDefault();
+        rect = previewDialog.getBoundingClientRect();
+        previewResize = {
+            direction: event.currentTarget.getAttribute("data-preview-resize") || "",
+            x: event.clientX,
+            y: event.clientY,
+            width: rect.width,
+            height: rect.height,
+        };
+        document.body.classList.add("preview-resizing");
+        document.addEventListener("mousemove", applyPreviewResize);
+        document.addEventListener("mouseup", stopPreviewResize);
+    }
+
+    if (topicModal && topicOpenButton) {
+        topicOpenButton.addEventListener("click", function () {
+            openModal(topicModal);
+            var titleInput = topicModal.querySelector('input[name="title"]');
+            if (titleInput) titleInput.focus();
+        });
+
+        Array.prototype.forEach.call(topicModal.querySelectorAll("[data-topic-create-close]"), function (button) {
+            button.addEventListener("click", function () {
+                closeModal(topicModal);
+            });
+        });
+    }
+
+    function formatTimer(seconds) {
+        var sign = seconds < 0 ? "-" : "";
+        seconds = Math.abs(seconds);
+        var minutes = Math.floor(seconds / 60);
+        var rest = seconds % 60;
+        return sign + String(minutes).padStart(2, "0") + ":" + String(rest).padStart(2, "0");
+    }
+
+    function timerState(topicId, durationSeconds) {
+        if (!topicTimerStates[topicId]) {
+            topicTimerStates[topicId] = {
+                duration: durationSeconds,
+                remaining: durationSeconds,
+                running: false,
+                targetEnd: 0,
+                interval: null
+            };
+        }
+        return topicTimerStates[topicId];
+    }
+
+    function renderTopicTimer(container, state) {
+        var remaining = container.querySelector("[data-topic-timer-remaining]");
+        var button = container.querySelector("[data-topic-timer-button]");
+        var label = "开始倒计时";
+        if (remaining) remaining.textContent = formatTimer(state.remaining);
+        if (state.running) {
+            label = "暂停倒计时";
+        } else if (state.remaining < state.duration) {
+            label = "继续倒计时";
+        }
+        if (button) {
+            button.setAttribute("aria-label", label);
+            button.setAttribute("title", label);
+        }
+        container.classList.toggle("running", state.running);
+        container.classList.toggle("overdue", state.remaining < 0);
+        syncPreviewTopicTimer(container.getAttribute("data-topic-id"), state, label);
+    }
+
+    function setPreviewTopicTimer(button) {
+        var topicId;
+        var duration;
+        var state;
+        if (!previewTopicTimer) return;
+        if (!button) {
+            previewTimerTopicId = "";
+            previewTopicTimer.setAttribute("hidden", "");
+            return;
+        }
+        topicId = button.getAttribute("data-topic-id") || "";
+        duration = Math.max(1, parseInt(button.getAttribute("data-topic-duration") || "15", 10) || 15) * 60;
+        state = timerState(topicId, duration);
+        previewTimerTopicId = topicId;
+        previewTopicTimer.removeAttribute("hidden");
+        if (previewTopicTitle) previewTopicTitle.textContent = button.getAttribute("data-topic-title") || "当前议题";
+        syncPreviewTopicTimer(topicId, state);
+    }
+
+    function syncPreviewTopicTimer(topicId, state, label) {
+        if (!previewTopicTimer || !state || topicId !== previewTimerTopicId) return;
+        if (previewTopicRemaining) previewTopicRemaining.textContent = formatTimer(state.remaining);
+        if (!label) {
+            label = state.running ? "暂停倒计时" : (state.remaining < state.duration ? "继续倒计时" : "开始倒计时");
+        }
+        if (previewTopicTimerButton) {
+            previewTopicTimerButton.setAttribute("aria-label", label);
+            previewTopicTimerButton.setAttribute("title", label);
+        }
+        previewTopicTimer.classList.toggle("running", state.running);
+        previewTopicTimer.classList.toggle("overdue", state.remaining < 0);
+    }
+
+    function stopTopicTimer(state) {
+        if (state.interval) {
+            clearInterval(state.interval);
+            state.interval = null;
+        }
+        state.running = false;
+    }
+
+    function tickTopicTimer(container, state) {
+        if (!container.isConnected) {
+            stopTopicTimer(state);
+            return;
+        }
+        state.remaining = Math.ceil((state.targetEnd - Date.now()) / 1000);
+        renderTopicTimer(container, state);
+    }
+
+    function startTopicTimer(container, state) {
+        if (state.remaining <= 0) {
+            state.remaining -= 1;
+        }
+        state.running = true;
+        state.targetEnd = Date.now() + state.remaining * 1000;
+        state.interval = setInterval(function () {
+            tickTopicTimer(container, state);
+        }, 1000);
+        renderTopicTimer(container, state);
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-topic-timer]"), function (container) {
+        var button = container.querySelector("[data-topic-timer-button]");
+        var topicId = container.getAttribute("data-topic-id");
+        var duration = Math.max(1, parseInt(container.getAttribute("data-topic-duration") || "15", 10) || 15) * 60;
+        var state = timerState(topicId, duration);
+        renderTopicTimer(container, state);
+        if (!button) return;
+        button.addEventListener("mousedown", function (event) {
+            event.stopPropagation();
+        });
+        button.addEventListener("click", function (event) {
+            event.stopPropagation();
+            event.preventDefault();
+            if (state.running) {
+                stopTopicTimer(state);
+                renderTopicTimer(container, state);
+                return;
+            }
+            startTopicTimer(container, state);
+        });
+    });
+
+    if (previewTopicTimerButton) {
+        previewTopicTimerButton.addEventListener("click", function (event) {
+            var state;
+            var container;
+            event.stopPropagation();
+            event.preventDefault();
+            if (!previewTimerTopicId) return;
+            state = topicTimerStates[previewTimerTopicId];
+            container = document.querySelector('[data-topic-timer][data-topic-id="' + previewTimerTopicId + '"]');
+            if (!state || !container) return;
+            if (state.running) {
+                stopTopicTimer(state);
+                renderTopicTimer(container, state);
+                return;
+            }
+            startTopicTimer(container, state);
+        });
+    }
+
+    function topicRows() {
+        return sortableTopicList ? Array.prototype.slice.call(sortableTopicList.querySelectorAll(".topic-item-wrap[data-topic-id]")) : [];
+    }
+
+    function topicIds() {
+        return topicRows().map(function (row) {
+            return row.getAttribute("data-topic-id");
+        });
+    }
+
+    function renumberTopics() {
+        topicRows().forEach(function (row, index) {
+            var number = row.querySelector(".topic-order-number");
+            if (number) number.textContent = index + 1;
+        });
+    }
+
+    function setSortStatus(message, isError) {
+        if (!sortStatus) return;
+        sortStatus.textContent = message || "";
+        if (isError) {
+            sortStatus.classList.add("error");
+        } else {
+            sortStatus.classList.remove("error");
+        }
+    }
+
+    function restoreTopicOrder() {
+        if (!sortableTopicList || !originalTopicOrder) return;
+        originalTopicOrder.forEach(function (id) {
+            var row = sortableTopicList.querySelector('[data-topic-id="' + id + '"]');
+            if (row) sortableTopicList.appendChild(row);
+        });
+        renumberTopics();
+    }
+
+    function saveTopicOrder() {
+        var xhr;
+        if (!sortableTopicList) return;
+        setSortStatus("排序保存中...", false);
+        xhr = new XMLHttpRequest();
+        xhr.open("POST", sortableTopicList.getAttribute("data-reorder-url"), true);
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.setRequestHeader("Accept", "application/json");
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState !== 4) return;
+            if (xhr.status >= 200 && xhr.status < 300) {
+                originalTopicOrder = topicIds();
+                setSortStatus("排序已保存", false);
+            } else {
+                restoreTopicOrder();
+                setSortStatus("排序保存失败，请刷新后重试。", true);
+            }
+        };
+        xhr.send(JSON.stringify({topic_ids: topicIds()}));
+    }
+
+    function rowAfterPointer(y) {
+        var rows = topicRows().filter(function (row) { return row !== draggedTopic; });
+        var closest = null;
+        rows.forEach(function (row) {
+            var rect = row.getBoundingClientRect();
+            if (y > rect.top + rect.height / 2) {
+                closest = row;
+            }
+        });
+        return closest;
+    }
+
+    if (sortableTopicList) {
+        originalTopicOrder = topicIds();
+        topicRows().forEach(function (row) {
+            row.addEventListener("dragstart", function (event) {
+                draggedTopic = row;
+                row.classList.add("dragging");
+                if (event.dataTransfer) {
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", row.getAttribute("data-topic-id"));
+                }
+            });
+            row.addEventListener("dragend", function () {
+                row.classList.remove("dragging");
+                draggedTopic = null;
+                renumberTopics();
+                saveTopicOrder();
+            });
+        });
+        sortableTopicList.addEventListener("dragover", function (event) {
+            if (!draggedTopic) return;
+            event.preventDefault();
+            var after = rowAfterPointer(event.clientY);
+            if (after) {
+                after.parentNode.insertBefore(draggedTopic, after.nextSibling);
+            } else {
+                sortableTopicList.insertBefore(draggedTopic, sortableTopicList.firstElementChild);
+            }
+            renumberTopics();
+        });
+    }
+
+    if (!modal) return;
+
+    Array.prototype.forEach.call(document.querySelectorAll(".attachment-preview-button"), function (button) {
+        button.addEventListener("click", function () {
+            clearPreview();
+            title.textContent = button.getAttribute("data-filename") || "附件预览";
+            download.href = button.getAttribute("data-download-url") || "#";
+            setPreviewTopicTimer(button);
+            if (button.getAttribute("data-is-image") === "1") {
+                image.src = button.getAttribute("data-preview-url");
+                image.alt = button.getAttribute("data-filename") || "附件预览";
+                image.style.display = "block";
+                frame.style.display = "none";
+            } else {
+                frame.src = button.getAttribute("data-preview-url");
+                frame.style.display = "block";
+                image.style.display = "none";
+            }
+            resetPreviewDialogSize();
+            openModal(modal);
+        });
+    });
+
+    if (previewDialog) {
+        Array.prototype.forEach.call(previewDialog.querySelectorAll("[data-preview-resize]"), function (handle) {
+            handle.addEventListener("mousedown", startPreviewResize);
+        });
+    }
+
+    Array.prototype.forEach.call(modal.querySelectorAll("[data-preview-close]"), function (button) {
+        button.addEventListener("click", closePreview);
+    });
+
+    document.addEventListener("keydown", function (event) {
+        if (event.key !== "Escape") return;
+        if (modal.classList.contains("open")) closePreview();
+        if (topicModal && topicModal.classList.contains("open")) closeModal(topicModal);
+    });
+});
+</script>
+{% endblock %}

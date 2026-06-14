@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智枢 Copilot 配置傻瓜教程</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+            color: #1f2937;
+            background: #edf1f6;
+            line-height: 1.55;
+        }
+        header {
+            background: #2f5da8;
+            color: #fff;
+            padding: 26px 22px;
+        }
+        .wrap { width: min(980px, calc(100vw - 28px)); margin: 0 auto; }
+        h1 { margin: 0 0 6px; font-size: 28px; }
+        h2 { margin: 0 0 12px; font-size: 20px; color: #111827; }
+        h3 { margin: 18px 0 8px; font-size: 16px; }
+        p { margin: 8px 0; }
+        a { color: #2f5da8; }
+        code {
+            padding: 2px 5px;
+            border-radius: 4px;
+            background: #eef4ff;
+            color: #1e3a8a;
+            font-family: Consolas, "Courier New", monospace;
+        }
+        pre {
+            margin: 10px 0;
+            padding: 14px;
+            border-radius: 7px;
+            background: #172033;
+            color: #e7eef9;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-family: Consolas, "Courier New", monospace;
+        }
+        main { padding: 20px 0 52px; }
+        .hero {
+            display: grid;
+            grid-template-columns: 1.2fr .8fr;
+            gap: 16px;
+            margin-top: 18px;
+        }
+        .card {
+            background: #fff;
+            border: 1px solid #d8e0eb;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, .10);
+            padding: 18px;
+            margin-bottom: 16px;
+        }
+        .mini {
+            display: grid;
+            gap: 8px;
+        }
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            width: fit-content;
+            border-radius: 999px;
+            padding: 4px 10px;
+            background: #eef4ff;
+            color: #264f93;
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .two {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+        .big-answer {
+            border-left: 5px solid #218838;
+            background: #f0fdf4;
+        }
+        .warning {
+            border-left: 5px solid #b45309;
+            background: #fff7ed;
+        }
+        .step {
+            display: grid;
+            grid-template-columns: 42px 1fr;
+            gap: 12px;
+        }
+        .num {
+            width: 36px;
+            height: 36px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            background: #2f5da8;
+            color: #fff;
+            font-weight: 800;
+        }
+        .do {
+            margin: 10px 0;
+            padding: 12px 14px;
+            border-radius: 7px;
+            background: #f8fafc;
+            border: 1px solid #d8e0eb;
+        }
+        .do strong { color: #111827; }
+        .success {
+            padding: 10px 12px;
+            border-radius: 7px;
+            background: #ecfdf5;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+            font-weight: 700;
+        }
+        .fail {
+            padding: 10px 12px;
+            border-radius: 7px;
+            background: #fff7ed;
+            color: #92400e;
+            border: 1px solid #fed7aa;
+        }
+        details {
+            border: 1px solid #d8e0eb;
+            border-radius: 7px;
+            background: #fff;
+            padding: 10px 12px;
+            margin: 10px 0;
+        }
+        summary {
+            cursor: pointer;
+            font-weight: 700;
+            color: #2f5da8;
+        }
+        .checklist label {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            padding: 7px 0;
+        }
+        .quiet { color: #64748b; font-size: 14px; }
+        .screenshot {
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #f8fafc;
+            margin: 12px 0;
+        }
+        .screenshot img {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        .fake-shot {
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            background: #f8fafc;
+            padding: 12px;
+            margin: 12px 0;
+        }
+        .fake-bar {
+            height: 34px;
+            border-radius: 6px;
+            background: #26384f;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            font-size: 13px;
+            margin-bottom: 10px;
+        }
+        .fake-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            border: 1px solid #d8e0eb;
+            border-radius: 6px;
+            background: #fff;
+            padding: 10px 12px;
+            margin-top: 8px;
+        }
+        .fake-switch {
+            width: 46px;
+            height: 24px;
+            border-radius: 999px;
+            background: #16a34a;
+            position: relative;
+            flex: 0 0 auto;
+        }
+        .fake-switch::after {
+            content: "";
+            position: absolute;
+            top: 3px;
+            right: 3px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #fff;
+        }
+        .callout {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 4px 9px;
+            font-size: 12px;
+            font-weight: 800;
+            margin-left: 6px;
+        }
+        .kbd {
+            border: 1px solid #cbd5e1;
+            border-bottom-width: 2px;
+            border-radius: 4px;
+            padding: 1px 5px;
+            background: #fff;
+            font-size: 13px;
+        }
+        @media (max-width: 820px) {
+            .hero, .two { grid-template-columns: 1fr; }
+            h1 { font-size: 24px; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="wrap">
+            <span class="pill">照着做，别思考版</span>
+            <h1>5 分钟把 QBP Copilot 接上智枢</h1>
+            <p>你只需要改一个 <code>.env</code> 文件，再去智枢后台加一个 Tool Server。</p>
+        </div>
+    </header>
+
+    <main class="wrap">
+        <section class="hero">
+            <div class="card big-answer">
+                <h2>最重要的一句话</h2>
+                <p>智枢地址变了，就改这里：</p>
+                <pre>C:\path\to\QBP_MGMT\.env</pre>
+                <p>里面这一行换成你的新智枢地址：</p>
+                <pre>ZHISHU_BASE_URL=http://你的智枢内网IP:端口</pre>
+            </div>
+            <div class="card mini">
+                <h2>本教程只做 4 件事</h2>
+                <p><strong>1.</strong> 先在智枢开启 API Key</p>
+                <p><strong>2.</strong> 创建并复制 API Key</p>
+                <p><strong>3.</strong> 粘贴到 QBP 的 <code>.env</code></p>
+                <p><strong>4.</strong> 在智枢添加 QBP 工具</p>
+            </div>
+        </section>
+
+        <section class="card warning">
+            <h2>先准备这 3 个东西</h2>
+            <div class="two">
+                <div class="do">
+                    <strong>智枢地址</strong>
+                    <p>例子：<code>http://127.0.0.1:4173</code></p>
+                    <p class="quiet">换环境后，这个地址可能会变。</p>
+                </div>
+                <div class="do">
+                    <strong>QBP 地址</strong>
+                    <p>本机打开：<code>http://127.0.0.1:5008</code></p>
+                    <p>给智枢访问：<code>http://你的QBP内网IP:5008</code></p>
+                </div>
+            </div>
+            <div class="do">
+                <strong>智枢 API Key</strong>
+                <p>等下去智枢里生成一个，复制出来。</p>
+            </div>
+        </section>
+
+        <section class="card warning">
+            <h2>这里之前确实有 gap</h2>
+            <p>智枢 / OpenWebUI 的 API Key 不是永远显示的。源码里确认到：</p>
+            <pre>Admin Settings → General → Enable API Keys</pre>
+            <p>这个开关没开时，你去用户 Settings / Account 里也看不到 API Key。</p>
+            <p>如果你不是 admin，还需要管理员给你的账号开启 API Keys 权限。</p>
+            <div class="do">
+                <strong>如果网页里根本找不到这个开关：</strong>
+                <p>直接用下面的硬解法，在智枢项目根目录创建或修改 <code>.env</code> 文件。</p>
+            </div>
+        </section>
+
+        <section class="card step">
+            <div class="num">1</div>
+            <div>
+                <h2>先登录智枢</h2>
+                <div class="do">
+                    <strong>你要做：</strong>
+                    <p>打开智枢地址，先登录进去。</p>
+                </div>
+                <p>智枢地址一般是：</p>
+                <pre>http://127.0.0.1:4173/</pre>
+                <div class="screenshot">
+                    <img src="docs_screenshots/zhishu-home.png" alt="智枢登录页截图">
+                </div>
+                <p class="quiet">我现在只能截到登录页，因为没有你的智枢登录态。你登录后按下面的步骤继续。</p>
+            </div>
+        </section>
+
+        <section class="card step">
+            <div class="num">2</div>
+            <div>
+                <h2>管理员先打开 Enable API Keys</h2>
+                <div class="do">
+                    <strong>你要做：</strong>
+                    <p>登录智枢后，进入 <code>Admin Settings</code>，找到 <code>General</code>，把 <code>Enable API Keys</code> 打开。</p>
+                </div>
+                <div class="fake-shot">
+                    <div class="fake-bar">Admin Settings / General</div>
+                    <div class="fake-row">
+                        <strong>Enable API Keys <span class="callout">必须打开</span></strong>
+                        <span class="fake-switch" aria-label="enabled"></span>
+                    </div>
+                    <div class="fake-row">
+                        <span>API Key Endpoint Restrictions</span>
+                        <span class="quiet">先不用开</span>
+                    </div>
+                </div>
+                <div class="fail">如果你看不到 Admin Settings，说明你不是智枢管理员。需要找管理员帮你打开这个开关。</div>
+                <div class="do">
+                    <strong>网页里没有这个开关？直接用这个硬解法：</strong>
+                    <p>打开智枢项目根目录：</p>
+                    <pre>C:\path\to\open-webui</pre>
+                    <p>新建或修改 <code>.env</code> 文件，写入：</p>
+                    <pre>ENABLE_API_KEYS=True
+USER_PERMISSIONS_FEATURES_API_KEYS=True</pre>
+                    <p>然后重启智枢。这个项目的后端会读取根目录 <code>.env</code>，重启后 API Key 功能会打开。</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="card step">
+            <div class="num">3</div>
+            <div>
+                <h2>在用户设置里创建 API Key</h2>
+                <div class="do">
+                    <strong>你要做：</strong>
+                    <p>点左下角头像 / 用户名 → <code>Settings</code> → <code>Account</code> → 找到 <code>API Key</code> → 点 <code>Create new key</code>。</p>
+                </div>
+                <div class="fake-shot">
+                    <div class="fake-bar">User Settings / Account</div>
+                    <div class="fake-row">
+                        <strong>API Key</strong>
+                        <span class="quiet">这里会出现 key 输入框</span>
+                    </div>
+                    <div class="fake-row">
+                        <strong>Create new key <span class="callout">点这里</span></strong>
+                        <span>复制按钮</span>
+                    </div>
+                </div>
+                <p>复制出来的 Key 可能只显示一次，先放到临时记事本。</p>
+                <details>
+                    <summary>还是看不到 API Key？</summary>
+                    <p>按这个顺序查：</p>
+                    <p><strong>1.</strong> Admin Settings / General 里的 <code>Enable API Keys</code> 是否打开。</p>
+                    <p><strong>2.</strong> 如果网页里没有这个入口，智枢根目录 <code>.env</code> 是否有 <code>ENABLE_API_KEYS=True</code>。</p>
+                    <p><strong>3.</strong> 当前账号是不是 admin。</p>
+                    <p><strong>4.</strong> 如果不是 admin，管理员是否给了你 <code>API Keys</code> 权限，或者 <code>.env</code> 是否有 <code>USER_PERMISSIONS_FEATURES_API_KEYS=True</code>。</p>
+                    <p><strong>5.</strong> 改完后有没有重启智枢，并刷新页面或重新登录。</p>
+                </details>
+            </div>
+        </section>
+
+        <section class="card step">
+            <div class="num">4</div>
+            <div>
+                <h2>打开 QBP 的 .env 文件</h2>
+                <p>文件位置：</p>
+                <pre>C:\path\to\QBP_MGMT\.env</pre>
+                <p><strong>注意：</strong><code>.env.example</code> 只是模板，QBP 真正读取的是 <code>.env</code>。</p>
+                <p>如果没有 <code>.env</code>，在 PowerShell 里运行：</p>
+                <pre>cd C:\path\to\QBP_MGMT
+copy .env.example .env</pre>
+                <div class="do">
+                    <strong>你要做：</strong>
+                    <p>打开 <code>.env</code>，把下面这段按你的环境改好。</p>
+                </div>
+                <pre>ZHISHU_BASE_URL=http://你的智枢内网IP:4173
+ZHISHU_API_KEY=把智枢API_KEY粘贴到这里
+COPILOT_DEFAULT_MODEL=
+COPILOT_FUNCTION_CALLING=default
+COPILOT_TOOL_IDS=server:qbp_meeting_mgmt
+
+QBP_PUBLIC_BASE_URL=http://你的QBP内网IP:5008
+QBP_TOOL_SERVER_TOKEN=qbp-tool-随便写一串长密钥</pre>
+                <details open>
+                    <summary>我到底要改哪几行？</summary>
+                    <p>只看这三行就够了：</p>
+                    <pre>ZHISHU_BASE_URL=http://你的智枢内网IP:4173
+ZHISHU_API_KEY=你的智枢API_KEY
+QBP_PUBLIC_BASE_URL=http://你的QBP内网IP:5008</pre>
+                    <p>其他行不懂就先别动。</p>
+                </details>
+            </div>
+        </section>
+
+        <section class="card step">
+            <div class="num">5</div>
+            <div>
+                <h2>重启 QBP</h2>
+                <div class="do">
+                    <strong>你要做：</strong>
+                    <p>保存 <code>.env</code> 后，回到 QBP 的 PowerShell 窗口，按 <span class="kbd">Ctrl</span> + <span class="kbd">C</span> 停掉，再重新启动。</p>
+                </div>
+                <pre>cd C:\path\to\QBP_MGMT
+python start.py</pre>
+                <div class="success">打开 QBP 右下角 Copilot，如果不再显示“待配置”，这一步就基本成功了。</div>
+            </div>
+        </section>
+
+        <section class="card step">
+            <div class="num">6</div>
+            <div>
+                <h2>在智枢里添加 QBP 工具</h2>
+                <p>这一步让智枢能读取 QBP 会议、Topic、会议纪要。</p>
+                <div class="do">
+                    <strong>你要做：</strong>
+                    <p>智枢后台 → <code>Admin / Settings / Integrations / Tools</code> → 新增 OpenAPI Tool Server。</p>
+                </div>
+                <pre>Name: QBP Meeting MGMT
+Server ID: qbp_meeting_mgmt
+OpenAPI URL: http://你的QBP内网IP:5008/copilot/tools/openapi.json
+Auth Type: Bearer Token
+Bearer Token: 填 QBP_TOOL_SERVER_TOKEN 那一串</pre>
+                <div class="warning do">
+                    <strong>别填错：</strong>
+                    <p><code>Server ID</code> 必须是 <code>qbp_meeting_mgmt</code>。</p>
+                    <p><code>Bearer Token</code> 必须和 <code>.env</code> 里的 <code>QBP_TOOL_SERVER_TOKEN</code> 一模一样。</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>最后这样验收</h2>
+            <div class="two">
+                <div class="do">
+                    <strong>在 QBP 验证</strong>
+                    <p>打开 QBP → 登录 → 点右下角 Copilot → 输入 <code>@</code>。</p>
+                    <p class="success">能弹出会议列表 = QBP 这边正常。</p>
+                </div>
+                <div class="do">
+                    <strong>问一句试试</strong>
+                    <p><code>@CM20260001 总结这个会议的采购风险</code></p>
+                    <p class="success">能回复 = QBP → 智枢 通了。</p>
+                </div>
+            </div>
+            <details>
+                <summary>用接口验证状态</summary>
+                <p>登录 QBP 后打开：</p>
+                <pre>http://127.0.0.1:5008/copilot/status</pre>
+                <p>看到下面这样就对：</p>
+                <pre>"api_key_configured": true
+"tool_server_configured": true
+"tool_ids": ["server:qbp_meeting_mgmt"]</pre>
+            </details>
+        </section>
+
+        <section class="card">
+            <h2>换环境时只看这里</h2>
+            <p>如果你的智枢地址不是 <code>http://127.0.0.1:4173</code>，不用改代码，只改 <code>.env</code>。</p>
+            <div class="two">
+                <div class="do">
+                    <strong>智枢地址变了</strong>
+                    <pre>ZHISHU_BASE_URL=http://新的智枢内网IP:端口</pre>
+                </div>
+                <div class="do">
+                    <strong>QBP 地址变了</strong>
+                    <pre>QBP_PUBLIC_BASE_URL=http://新的QBP内网IP:5008</pre>
+                </div>
+            </div>
+            <p>然后智枢后台的 Tool Server URL 也跟着改：</p>
+            <pre>http://新的QBP内网IP:5008/copilot/tools/openapi.json</pre>
+            <div class="fail">改完地址后，一定要重启 QBP。</div>
+        </section>
+
+        <section class="card checklist">
+            <h2>最终勾选</h2>
+            <label><input type="checkbox"> 智枢后台 <code>Enable API Keys</code> 已经打开</label>
+            <label><input type="checkbox"> 我拿到了智枢 API Key</label>
+            <label><input type="checkbox"> 我把 <code>ZHISHU_BASE_URL</code> 改成了当前智枢地址</label>
+            <label><input type="checkbox"> 我把 <code>ZHISHU_API_KEY</code> 粘贴进了 <code>.env</code></label>
+            <label><input type="checkbox"> 我把 <code>QBP_PUBLIC_BASE_URL</code> 改成了智枢能访问的 QBP 地址</label>
+            <label><input type="checkbox"> 我重启了 QBP</label>
+            <label><input type="checkbox"> 我在智枢里添加了 OpenAPI Tool Server</label>
+            <label><input type="checkbox"> Server ID 是 <code>qbp_meeting_mgmt</code></label>
+            <label><input type="checkbox"> 在 QBP Copilot 输入 <code>@</code> 能看到会议</label>
+        </section>
+    </main>
+</body>
+</html>

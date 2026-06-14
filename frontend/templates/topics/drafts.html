@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% import "macros/icons.html" as icons %}
+{% block title %}议题池 - QBP Meeting MGMT{% endblock %}
+{% set copilot_page_label = '议题池' %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ icons.icon('drafts', 'icon-title') }} 议题池</h1>
+        <p class="muted">普通用户在这里准备自己的议题，并申请加入某场 QBP Meeting。</p>
+    </div>
+    <div class="page-header-actions">
+        <button class="btn btn-outline copilot-header-trigger" type="button" data-copilot-open title="打开 Copilot">
+            {{ icons.icon('magic', 'icon-copilot') }} Copilot
+        </button>
+        <a href="{{ url_for('topic_draft_create') }}" class="btn btn-success">{{ icons.icon('plus') }} 新建议题</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-title">{{ icons.icon('search') }} 搜索与筛选</div>
+    <form method="get" class="meeting-filter-grid topic-draft-filter-grid">
+        <input class="meeting-filter-control meeting-title-search" name="search" placeholder="搜索议题标题" value="{{ filters.raw.get('search', '') }}">
+        <select class="meeting-filter-control" name="plan_version_id" data-plan-version-select>
+            <option value="">全部 Plan Version</option>
+            {% for option in plan_version_options %}
+            <option value="{{ option.id }}" {% if filters.plan_version_id == option.id %}selected{% endif %}>{{ option.name }}</option>
+            {% endfor %}
+        </select>
+        <select class="meeting-filter-control" name="plan_round_id" data-plan-round-select>
+            <option value="">全部 Round</option>
+            {% set selected_version_id = filters.plan_version_id or (plan_version_options[0].id if plan_version_options else none) %}
+            {% for option in round_options_for_version(selected_version_id) %}
+            <option value="{{ option.id }}" {% if filters.plan_round_id == option.id %}selected{% endif %}>{{ option.name }}</option>
+            {% endfor %}
+        </select>
+        <select class="meeting-filter-control" name="topic_category">
+            <option value="">全部类别</option>
+            {% for option in topic_category_options %}
+            <option value="{{ option }}" {% if filters.topic_category == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+        </select>
+        <select class="meeting-filter-control" name="creator_name">
+            <option value="">全部创建人</option>
+            {% for name in creator_options %}
+            <option value="{{ name }}" {% if filters.creator_name == name %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+        </select>
+        <select class="meeting-filter-control" name="target_meeting_no">
+            <option value="">全部目标会议</option>
+            {% for meeting_no in target_meeting_options %}
+            <option value="{{ meeting_no }}" {% if filters.target_meeting_no == meeting_no %}selected{% endif %}>{{ meeting_no }}</option>
+            {% endfor %}
+        </select>
+        <select class="meeting-filter-control" name="status">
+            <option value="">全部状态</option>
+            {% for key, label in workflow_status_labels.items() %}
+            <option value="{{ key }}" {% if filters.status == key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <div class="meeting-filter-control date-range-picker" data-date-range-label="更新时间">
+            <button class="date-range-trigger" type="button">
+                <span class="date-range-title">更新时间</span>
+                <span class="date-range-value" data-empty="">
+                    {% if filters.raw.get('updated_start') or filters.raw.get('updated_end') %}
+                    {{ filters.raw.get('updated_start', '开始') or '开始' }} 至 {{ filters.raw.get('updated_end', '结束') or '结束' }}
+                    {% endif %}
+                </span>
+            </button>
+            <div class="date-range-popover">
+                <input name="updated_start" type="text" data-datepicker pattern="\d{4}-\d{2}-\d{2}" maxlength="10" value="{{ filters.raw.get('updated_start', '') }}" aria-label="更新时间 从">
+                <span>至</span>
+                <input name="updated_end" type="text" data-datepicker pattern="\d{4}-\d{2}-\d{2}" maxlength="10" value="{{ filters.raw.get('updated_end', '') }}" aria-label="更新时间 到">
+            </div>
+        </div>
+        <div class="split-actions">
+            <button class="btn" type="submit">{{ icons.icon('search') }} 搜索</button>
+            <a class="btn btn-secondary" href="{{ url_for('topic_drafts') }}">{{ icons.icon('redo') }} 重置</a>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-title">{{ icons.icon('table') }} 议题信息</div>
+    <div class="table-scroll meeting-table-wrap">
+        <table class="meeting-table topic-drafts-table">
+            <thead>
+                <tr>
+                    <th>议题编号</th>
+                    <th>议题标题</th>
+                    <th>Plan Version</th>
+                    <th>Round</th>
+                    <th>类别</th>
+                    <th>创建人</th>
+                    <th>目标会议</th>
+                    <th>完善度</th>
+                    <th>状态</th>
+                    <th>更新时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for topic in topics %}
+                {% set is_owner = topic.created_by == current_user.id %}
+                {% set can_edit = is_owner and topic.workflow_status in ['draft', 'rejected', 'withdrawn'] %}
+                {% set can_delete = is_owner and topic.workflow_status in ['draft', 'rejected', 'withdrawn'] %}
+                {% set readiness = topic_completeness_map[topic.id] %}
+                {% set readiness_class = 'ready' if readiness.score >= 70 else 'preparing' if readiness.score >= 40 else 'risk' %}
+                <tr>
+                    <td>{{ topic.topic_no or ('T%08d'|format(topic.id)) }}</td>
+                    <td>
+                        <strong>{{ topic.title }}</strong>
+                        {% if topic.review_comment %}
+                        <div class="muted">审批意见：{{ topic.review_comment }}</div>
+                        {% endif %}
+                    </td>
+                    <td><span class="scope-chip">{{ topic.plan_version_name }}</span></td>
+                    <td><span class="scope-chip">{{ topic.plan_round_name }}</span></td>
+                    <td>{{ topic.category or '未分类' }}</td>
+                    <td>{{ topic.creator.display_name if topic.creator else '-' }}</td>
+                    <td>{{ topic.requested_meeting.meeting_no if topic.requested_meeting else topic.meeting.meeting_no if topic.meeting else '-' }}</td>
+                    <td>
+                        <div class="readiness-cell draft-readiness-cell">
+                            <div class="readiness-line">
+                                <span class="agenda-readiness {{ readiness_class }}">完善度 {{ readiness.score }}</span>
+                            </div>
+                            <div class="readiness-bar"><span style="width: {{ readiness.score }}%;"></span></div>
+                        </div>
+                    </td>
+                    <td>{{ workflow_status_labels[topic.workflow_status] }}</td>
+                    <td>{{ format_local_datetime(topic.updated_at) }}</td>
+                    <td>
+                        <div class="row-actions">
+                            <a class="icon-btn row-action-btn" href="{{ url_for('topic_draft_edit', topic_id=topic.id) }}" title="{{ '编辑' if can_edit else '查看' }}" aria-label="{{ '编辑' if can_edit else '查看' }}">{{ icons.icon('eye' if not can_edit else 'save') }}</a>
+                            {% if topic.workflow_status == 'submitted' and is_owner %}
+                            <form method="post" action="{{ url_for('topic_draft_withdraw', topic_id=topic.id) }}">
+                                <button class="icon-btn row-action-btn" type="submit" title="撤回" aria-label="撤回">{{ icons.icon('back') }}</button>
+                            </form>
+                            {% endif %}
+                            {% if can_delete or current_user.role == 'admin' %}
+                            <form method="post" action="{{ url_for('topic_delete', topic_id=topic.id) }}" onsubmit="return confirm('确认删除该议题草稿？');">
+                                <button class="icon-btn row-action-btn row-action-danger" type="submit" title="删除" aria-label="删除">{{ icons.icon('trash') }}</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="10" class="muted">暂无议题草稿</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+window.AppShell.ready(function () {
+    function openPicker(input) {
+        if (!input) return;
+        input.focus();
+        if (window.AppDatepicker) window.AppDatepicker.open(input);
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll(".date-range-picker"), function (picker) {
+        var trigger = picker.querySelector(".date-range-trigger");
+        var popover = picker.querySelector(".date-range-popover");
+        var inputs = picker.querySelectorAll("input[data-datepicker]");
+        var value = picker.querySelector(".date-range-value");
+        if (!trigger || !popover || inputs.length < 2) return;
+
+        function syncLabel() {
+            var start = inputs[0].value;
+            var end = inputs[1].value;
+            var hasValue = !!(start || end);
+            value.textContent = hasValue ? (start || "开始") + " 至 " + (end || "结束") : value.getAttribute("data-empty");
+            picker.classList.toggle("has-value", hasValue);
+        }
+        syncLabel();
+
+        trigger.addEventListener("click", function (event) {
+            event.stopPropagation();
+            picker.classList.toggle("open");
+            if (picker.classList.contains("open")) {
+                openPicker(inputs[0]);
+            }
+        });
+        inputs[0].addEventListener("change", function () {
+            syncLabel();
+            openPicker(inputs[1]);
+        });
+        inputs[1].addEventListener("change", syncLabel);
+        popover.addEventListener("click", function (event) {
+            event.stopPropagation();
+        });
+    });
+
+    if (!window.TopicDraftDateRangeCloseBound) {
+        window.TopicDraftDateRangeCloseBound = true;
+        document.addEventListener("click", function () {
+            Array.prototype.forEach.call(document.querySelectorAll(".date-range-picker.open"), function (picker) {
+                picker.classList.remove("open");
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

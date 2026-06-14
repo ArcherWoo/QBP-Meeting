@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% import "macros/icons.html" as icons %}
+{% set page_title = '权限管理' if is_admin_view else '组员管理' %}
+{% block title %}{{ page_title }} - QBP Meeting MGMT{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ icons.icon('shield', 'icon-title') }} {{ page_title }}</h1>
+        <p class="muted">
+            {% if is_admin_view %}管理员可创建用户、启用/禁用账号、切换角色与所属用户组、重置密码。
+            {% else %}组长可在本组内创建组员、启用/禁用账号、调整所属用户组、重置密码（无法变更角色）。
+            {% endif %}
+        </p>
+    </div>
+</div>
+
+<div class="permission-layout{% if not is_admin_view %} permission-layout-single{% endif %}">
+    <section class="card permission-users-card permission-main">
+        <div class="card-title">
+            <span>{{ icons.icon('table') }} 用户列表</span>
+            <div class="user-list-actions">
+                <span class="user-list-count">共 {{ users|length }} 人</span>
+                <button type="button" class="btn btn-sm user-create-toggle"
+                        data-target="user-create-inline"
+                        data-label-closed="+ 新增用户"
+                        data-label-open="取消新增"
+                        aria-expanded="false" aria-controls="user-create-inline">+ 新增用户</button>
+            </div>
+        </div>
+        <div class="user-list">
+            <div id="user-create-inline" class="user-create-inline" hidden>
+                <form method="post" action="{{ url_for('admin_user_create') }}" class="permission-create-form user-admin-create">
+                    <div class="form-group"><label>登录账号</label><input name="username" required></div>
+                    <div class="form-group"><label>显示名称</label><input name="display_name"></div>
+                    <div class="form-group"><label>邮箱</label><input name="email" type="email" placeholder="用于飞书同步"></div>
+                    <div class="form-group"><label>初始密码</label><input name="password" placeholder="至少 6 位" required></div>
+                    {% if is_admin_view %}
+                    <div class="form-group"><label>角色</label>
+                        <select name="role">
+                            <option value="user">普通用户</option>
+                            <option value="group_leader">组长</option>
+                            <option value="admin">管理员</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>所属用户组</label>
+                        <select name="group_id" data-role-scoped-group-select>
+                            <option value="" data-role-scope="admin" hidden disabled>不归属用户组</option>
+                            {% for g in groups %}
+                            <option value="{{ g.id }}" data-role-scope="{{ 'admin' if g.is_admin_group else 'business' }}" data-admin-allowed="{{ '1' if g.is_admin_group else '0' }}"{% if g.is_admin_group %} hidden disabled{% endif %}>{{ g.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group permission-create-status"><label>账号状态</label>
+                        <label class="checkbox-line"><input type="checkbox" name="enabled" value="1" checked> 启用账号</label>
+                    </div>
+                    {% else %}
+                    <input type="hidden" name="role" value="user">
+                    <input type="hidden" name="group_id" value="{{ current_user.group_id }}">
+                    <input type="hidden" name="enabled" value="1">
+                    <div class="form-group permission-create-note">
+                        <p class="muted">将创建为本组（{{ current_user.group.name if current_user.group else '-' }}）的普通用户</p>
+                    </div>
+                    {% endif %}
+                    <div class="user-admin-create-actions permission-create-actions">
+                        <button class="btn btn-sm" type="submit">{{ icons.icon('save') }} 创建</button>
+                    </div>
+                </form>
+            </div>
+            {% for user in users %}
+            <details class="user-row">
+                <summary class="user-row-summary">
+                    <div class="user-row-identity">
+                        <strong>{{ user.username }}</strong>
+                        {% if user.display_name %}<span class="muted">{{ user.display_name }}</span>{% endif %}
+                    </div>
+                    <span class="user-role-chip role-{{ user.role }}">
+                        {% if user.role == 'admin' %}管理员{% elif user.role == 'group_leader' %}组长{% else %}普通用户{% endif %}
+                    </span>
+                    <span class="user-group-chip">{{ user.group.name if user.group else '未分组' }}</span>
+                    <span class="user-status-chip {{ 'on' if user.enabled else 'off' }}">
+                        <span class="status-dot"></span>{{ '启用' if user.enabled else '禁用' }}
+                    </span>
+                    <span class="user-row-toggle" aria-hidden="true">展开</span>
+                </summary>
+                <div class="user-row-body">
+                    <form id="user-update-{{ user.id }}" method="post" action="{{ url_for('admin_user_update', user_id=user.id) }}" class="user-edit-form">
+                        <div class="form-group"><label>显示名称</label><input name="display_name" value="{{ user.display_name }}"></div>
+                        <div class="form-group"><label>邮箱</label><input name="email" type="email" value="{{ user.email or '' }}" placeholder="用于飞书同步"></div>
+                        <div class="form-group"><label>角色</label>
+                            {% if is_admin_view %}
+                            <select name="role" {% if user.id == current_user.id %}disabled{% endif %}>
+                                <option value="user" {% if user.role == 'user' %}selected{% endif %}>普通用户</option>
+                                <option value="group_leader" {% if user.role == 'group_leader' %}selected{% endif %}>组长</option>
+                                <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>管理员</option>
+                            </select>
+                            {% if user.id == current_user.id %}<input type="hidden" name="role" value="admin">{% endif %}
+                            {% else %}
+                            <input type="hidden" name="role" value="user">
+                            <div class="user-edit-static">普通用户</div>
+                            {% endif %}
+                        </div>
+                        <div class="form-group"><label>用户组</label>
+                            {% if is_admin_view %}
+                            <select name="group_id">
+                                <option value="">不归属用户组</option>
+                                {% for g in groups %}
+                                <option value="{{ g.id }}" data-admin-allowed="{{ '1' if g.is_admin_group else '0' }}" {% if user.group_id == g.id %}selected{% endif %}>{{ g.name }}</option>
+                                {% endfor %}
+                            </select>
+                            {% else %}
+                            <select name="group_id">
+                                {% for g in groups if not g.is_admin_group %}
+                                <option value="{{ g.id }}" {% if user.group_id == g.id %}selected{% endif %}>{{ g.name }}</option>
+                                {% endfor %}
+                            </select>
+                            {% endif %}
+                        </div>
+                        <div class="form-group"><label>账号状态</label>
+                            <label class="checkbox-line user-edit-toggle">
+                                <input type="checkbox" name="enabled" value="1" {% if user.enabled %}checked{% endif %} {% if user.id == current_user.id %}disabled{% endif %}>
+                                启用账号
+                            </label>
+                            {% if user.id == current_user.id %}<input type="hidden" name="enabled" value="1">{% endif %}
+                        </div>
+                        <div class="user-edit-actions">
+                            <button class="btn btn-sm" type="submit">{{ icons.icon('save') }} 保存修改</button>
+                        </div>
+                    </form>
+                    <div class="user-secondary-actions">
+                        <form method="post" action="{{ url_for('admin_user_reset_password', user_id=user.id) }}" class="user-reset-form">
+                            <label class="user-reset-label">
+                                <span>重置密码</span>
+                                <input name="password" placeholder="新密码（至少 6 位）" minlength="6" required>
+                            </label>
+                            <button class="btn btn-secondary btn-sm" type="submit">{{ icons.icon('key') }} 提交</button>
+                        </form>
+                        {% if is_admin_view and user.id != current_user.id %}
+                        <form method="post" action="{{ url_for('admin_user_delete', user_id=user.id) }}" class="user-delete-form" onsubmit="return confirm('确认删除该用户吗？仅在该用户没有任何业务记录时才能删除，此操作不可撤销。');">
+                            <button class="btn btn-secondary btn-sm" type="submit">{{ icons.icon('trash') }} 删除用户</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </details>
+            {% else %}
+            <div class="user-list-empty muted">暂无用户。</div>
+            {% endfor %}
+        </div>
+    </section>
+
+    {% if is_admin_view %}
+    <aside class="card group-manager" id="group-manager">
+        <div class="card-title">{{ icons.icon('layers') }} 用户组管理</div>
+        <form method="post" action="{{ url_for('admin_group_create') }}" class="group-create-row">
+            <input name="name" placeholder="新用户组名称" required>
+            <button class="btn btn-sm" type="submit">{{ icons.icon('plus') }} 新增</button>
+        </form>
+        <div class="group-list">
+            {% for g in groups %}
+            {% set is_custom = g.code.startswith('custom-') and not g.is_admin_group %}
+            <div class="group-row">
+                <div class="group-row-main">
+                    {% if is_custom %}
+                    <form method="post" action="{{ url_for('admin_group_update', group_id=g.id) }}" class="group-edit-form">
+                        <input name="name" value="{{ g.name }}" required aria-label="用户组名称" title="修改后按 Enter 保存">
+                    </form>
+                    {% else %}
+                    <strong class="group-row-name">{{ g.name }}</strong>
+                    {% endif %}
+                    <span class="group-row-count">{{ g.members.count() }} 人</span>
+                </div>
+                <div class="group-row-action">
+                    {% if is_custom %}
+                    <form method="post" action="{{ url_for('admin_group_delete', group_id=g.id) }}" class="group-delete-form" onsubmit="return confirm('确认删除该用户组吗？组内成员会自动变为未分组。');">
+                        <button class="btn btn-secondary btn-sm" type="submit" title="删除用户组">{{ icons.icon('trash') }}</button>
+                    </form>
+                    {% else %}
+                    <span class="group-default-tag">默认</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <p class="group-manager-hint muted">删除自定义组后，组内成员会自动变为未分组。</p>
+    </aside>
+    {% endif %}
+</div>
+
+<script>
+window.AppShell.ready(function () {
+    function syncGroupOptions(roleSelect) {
+        var form = roleSelect.form;
+        var groupSelect = form ? form.querySelector('select[name="group_id"]') : null;
+        if (!groupSelect) return;
+        if (groupSelect.hasAttribute("data-role-scoped-group-select")) {
+            var desiredScope = roleSelect.value === "admin" ? "admin" : "business";
+            var firstAllowed = null;
+            Array.prototype.forEach.call(groupSelect.options, function (option) {
+                var allowed = option.getAttribute("data-role-scope") === desiredScope;
+                option.hidden = !allowed;
+                option.disabled = !allowed;
+                if (allowed && !firstAllowed) firstAllowed = option;
+            });
+            var selected = groupSelect.options[groupSelect.selectedIndex];
+            if (!selected || selected.disabled || selected.getAttribute("data-role-scope") !== desiredScope) {
+                groupSelect.value = firstAllowed ? firstAllowed.value : "";
+            }
+            return;
+        }
+        Array.prototype.forEach.call(groupSelect.options, function (option) {
+            var adminRole = roleSelect.value === "admin";
+            var allowed = !option.value || option.getAttribute("data-admin-allowed") === "1";
+            option.hidden = adminRole && !allowed;
+            option.disabled = adminRole && !allowed;
+        });
+        if (roleSelect.value === "admin") {
+            var selected = groupSelect.options[groupSelect.selectedIndex];
+            if (selected && selected.disabled) {
+                groupSelect.value = "";
+            }
+        }
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll('select[name="role"]'), function (roleSelect) {
+        syncGroupOptions(roleSelect);
+        roleSelect.addEventListener("change", function () {
+            syncGroupOptions(roleSelect);
+        });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('.group-edit-form input'), function (input) {
+        var initial = input.value;
+        input.addEventListener('blur', function () {
+            if (input.value !== initial && input.value.trim()) {
+                input.form.submit();
+            }
+        });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('.user-create-toggle'), function (btn) {
+        btn.addEventListener('click', function () {
+            var target = document.getElementById(btn.getAttribute('data-target'));
+            if (!target) return;
+            var willOpen = target.hidden;
+            target.hidden = !willOpen;
+            btn.setAttribute('aria-expanded', String(willOpen));
+            btn.textContent = willOpen ? (btn.getAttribute('data-label-open') || '取消') : (btn.getAttribute('data-label-closed') || '+ 新增');
+            if (willOpen) {
+                var firstInput = target.querySelector('input, select');
+                if (firstInput) firstInput.focus();
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
