@@ -111,9 +111,9 @@
                         <label class="aiw-source-toggle aiw-source-toggle-global">
                             <input type="checkbox" name="knowledge_sources" value="GLOBAL"
                                    {% if 'GLOBAL' in selected_knowledge_source_scopes %}checked{% endif %}>
-                            <span class="aiw-source-code">通用</span>
+                            <span class="aiw-source-code">通用经验</span>
                         </label>
-                        <select class="aiw-global-category-select" name="knowledge_category_GLOBAL" aria-label="通用 分类">
+                        <select class="aiw-global-category-select" name="knowledge_category_GLOBAL" aria-label="通用经验分类">
                             <option value="" {% if global_selected_category is none %}selected{% endif %}>全部</option>
                             {% for category in knowledge_source_options[0].categories %}
                             <option value="{{ category.id }}" {% if global_selected_category == category.id %}selected{% endif %}>{{ category.name }}</option>
@@ -132,20 +132,24 @@
                                    {% if option.scope == selected_business_scope.value and option.scope in selected_knowledge_source_scopes %}checked{% endif %}>
                             {% endfor %}
                         </div>
-                        <select class="aiw-business-source-select" aria-label="业务组">
-                            {% for option in knowledge_source_options if option.scope != 'GLOBAL' %}
-                            <option value="{{ option.scope }}" {% if option.scope == selected_business_scope.value %}selected{% endif %}>{{ option.scope }}</option>
-                            {% endfor %}
-                        </select>
-                        <div class="aiw-business-category-stack">
+                        <div class="aiw-source-field aiw-business-department-field">
+                            <label class="aiw-source-field-label">业务部门</label>
+                            <select class="aiw-business-source-select" aria-label="业务部门">
+                                {% for option in knowledge_source_options if option.scope != 'GLOBAL' %}
+                                <option value="{{ option.scope }}" {% if option.scope == selected_business_scope.value %}selected{% endif %}>{{ option.scope }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="aiw-source-field aiw-business-category-stack">
+                            <label class="aiw-source-field-label">业务分类</label>
                             {% for option in knowledge_source_options if option.scope != 'GLOBAL' %}
                             {% set selected_category = selected_knowledge_source_categories.get(option.scope) %}
                             <select class="aiw-business-category-select"
                                     name="knowledge_category_{{ option.scope }}"
-                                    aria-label="{{ option.scope }} 分类"
+                                    aria-label="{{ option.scope }} 业务分类"
                                     data-scope="{{ option.scope }}"
                                     {% if option.scope != selected_business_scope.value %}disabled hidden{% endif %}>
-                                <option value="" {% if selected_category is none %}selected{% endif %}>全部分类</option>
+                                <option value="" {% if selected_category is none %}selected{% endif %}>全部</option>
                                 {% for category in option.categories %}
                                 <option value="{{ category.id }}" {% if selected_category == category.id %}selected{% endif %}>{{ category.name }}</option>
                                 {% endfor %}

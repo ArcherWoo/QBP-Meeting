@@ -6492,7 +6492,7 @@ def test_knowhow_create_requires_subcategory_and_entry_can_toggle_active(client,
 
     create_response = client.post(
         "/ai-workshop/knowhow/create",
-        data={"scope": "MC", "category_id": str(category_id), "content": "MC 需要看 TCO", "is_active": "1"},
+        data={"scope": "MC", "category_id": str(category_id), "content": "MC 需要看 TCO"},
         follow_redirects=True,
     )
     html = create_response.get_data(as_text=True)

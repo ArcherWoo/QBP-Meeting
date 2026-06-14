@@ -701,7 +701,7 @@ def create_app(config_name="default"):
             scope=scope,
             category_id=category.id,
             content=content,
-            is_active=bool(request.form.get("is_active")),
+            is_active=True,
             created_by=current_user.id,
             updated_by=current_user.id,
         )

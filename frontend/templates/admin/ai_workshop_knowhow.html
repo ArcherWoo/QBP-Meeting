@@ -99,11 +99,6 @@
                     <option value="{{ category.id }}" {% if selected_category_id == category.id %}selected{% endif %}>{{ category.name }}</option>
                     {% endfor %}
                 </select>
-                <label class="aiw-switch">
-                    <input type="checkbox" name="is_active" value="1" checked>
-                    <span></span>
-                    启用
-                </label>
                 <button class="btn btn-success btn-sm" type="submit" {% if not categories %}disabled{% endif %}>{{ icons.icon('plus') }} 添加</button>
             </div>
         </div>
