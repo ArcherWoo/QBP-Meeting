@@ -10,7 +10,14 @@ data/db/
 data/uploads/
 data/previews/
 data/vector/
-embedding_model/
+embedding_model/*
+!embedding_model/README.md
+!embedding_model/sentence-transformers/
+embedding_model/sentence-transformers/*
+!embedding_model/sentence-transformers/all-MiniLM-L6-v2/
+embedding_model/sentence-transformers/all-MiniLM-L6-v2/*
+!embedding_model/sentence-transformers/all-MiniLM-L6-v2/.gitkeep
+!embedding_model/sentence-transformers/all-MiniLM-L6-v2/README.md
 logs/
 .pytest_cache/
 .tmp_pytest/
